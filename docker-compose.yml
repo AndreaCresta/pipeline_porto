@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  db_tesi:
+    image: postgres:18
+    container_name: postgres_porto
+    environment:
+      POSTGRES_USER: admin_tesi
+      POSTGRES_PASSWORD: password_sicura
+      POSTGRES_DB: logistica_liguria
+    ports:
+      - "5432:5432"
+    volumes:
+      # MODIFICA QUI: Puntiamo alla cartella madre come richiesto dalla v18
+      - dati_porto:/var/lib/postgresql
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_interfaccia
+    environment:
+      PGADMIN_DEFAULT_EMAIL: studente@tesi.it
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - db_tesi
+
+volumes:
+  dati_porto:
