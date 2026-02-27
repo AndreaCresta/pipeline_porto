@@ -16,7 +16,7 @@ with DAG(
     'pipeline_mar_ligure_completa', 
     default_args=default_args,
     description='Pipeline ETL completa: Cleansing, Dimensioni e Fatti',
-    schedule='@hourly', 
+    schedule='*/5 * * * *',
     catchup=False,
     tags=['logistica', 'tesi', 'produzione'],
 ) as dag:
