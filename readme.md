@@ -161,7 +161,29 @@ CREATE INDEX idx_ais_mmsi ON staging_ais_data (mmsi);
 CREATE INDEX idx_ais_mmsi_time ON staging_ais_data (mmsi, timestamp_utc DESC);
 
 ### 2. Architettura Star Schema (Data Warehouse Design)
-Abbiamo progettato la separazione dei dati in **Fatti** e **Dimensioni** per massimizzare l'efficienza delle JOIN e mantenere l'integrità referenziale:
+
+Per trasformare il flusso continuo di dati AIS in metriche logistiche interrogabili, il processo di Data Engineering è stato suddiviso in 4 step sequenziali. Questo approccio garantisce l'integrità del dato e l'ottimizzazione delle performance del database.
+
+#### Step 1: Costruzione delle Dimensioni (Anagrafiche)
+Il primo passaggio consiste nell'estrarre le informazioni statiche dalla tabella di staging temporanea per popolare le tabelle satellite dello Star Schema.
+* **`dim_navi`**: Creazione di un'anagrafica univoca basata sul codice MMSI (Primary Key) per eliminare la ridondanza dei nomi nave ripetuti ad ogni ping GPS.
+* **`dim_terminal`**: Definizione a database delle zone di geofencing (Genova Voltri, Vado Gateway, ecc.) per rendere le query geografiche indipendenti dal codice applicativo.
+
+#### Step 2: Rilevamento degli Eventi Logistici (Window Functions)
+I dati AIS forniscono posizioni assolute, ma per la logistica servono eventi di stato. 
+* Verranno implementate query SQL avanzate utilizzando funzioni analitiche (es. `LAG()`) per confrontare cronologicamente i record di una stessa nave.
+* **Trigger di Arrivo/Partenza**: Un cambio di stato nella colonna `terminal_zona` tra il record al tempo *T* e il record al tempo *T-1* identificherà matematicamente l'ingresso o l'uscita da un molo.
+
+#### Step 3: Popolamento della Tabella dei Fatti (`fact_movimenti`)
+Gli eventi isolati nello Step 2 verranno consolidati in una tabella centrale ottimizzata.
+* La tabella relazionerà l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
+* Questa struttura ridurrà drasticamente il volume dei dati da interrogare rispetto allo staging grezzo, migliorando le performance in vista dell'integrazione con i tool di BI.
+
+#### Step 4: Calcolo dei KPI e Materializzazione (Viste SQL)
+L'ultimo step applicativo consiste nella creazione di Viste SQL per astrarre la complessità dei calcoli:
+* **Time in Port**: Calcolo automatizzato della permanenza al molo (`orario_partenza - orario_arrivo`).
+* **Overstay & Congestione**: Filtri applicati alle viste per identificare anomalie nei tempi di attesa e colli di bottiglia nei terminal liguri.
+
 
 #### **Tabelle Dimensione (Anagrafiche)**
 * **`dim_navi`**: Memorizza i dati statici delle navi (MMSI, Ship Name). Risolve il problema della ridondanza presente nello staging, dove il nome della nave viene ripetuto per ogni posizione inviata.
