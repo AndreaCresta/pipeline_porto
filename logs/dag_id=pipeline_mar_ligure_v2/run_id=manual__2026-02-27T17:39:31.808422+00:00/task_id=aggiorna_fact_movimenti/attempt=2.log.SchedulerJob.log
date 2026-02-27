@@ -1,1 +1,0 @@
-[2026-02-27T17:44:33.462+0000] {scheduler_job_runner.py:781} ERROR - Executor reports task instance <TaskInstance: pipeline_mar_ligure_v2.aggiorna_fact_movimenti manual__2026-02-27T17:39:31.808422+00:00 [queued]> finished (failed) although the task says it's queued. (Info: None) Was the task killed externally?
