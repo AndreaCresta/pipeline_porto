@@ -151,6 +151,15 @@ Per garantire la scalabilità della pipeline e gestire migliaia di record AIS in
 * **`idx_ais_mmsi`**: Indice per ottimizzare il raggruppamento e il filtraggio dei messaggi appartenenti alla medesima unità navale.
 * **`idx_ais_mmsi_time`**: Indice composito (`mmsi`, `timestamp_utc DESC`) progettato specificamente per le query di ricostruzione della rotta, riducendo drasticamente i tempi di esecuzione per la ricerca dell'ultima posizione nota.
 
+-- Indice per velocizzare le ricerche cronologiche
+CREATE INDEX idx_ais_timestamp ON staging_ais_data (timestamp_utc);
+
+-- Indice per velocizzare le ricerche per singola nave (MMSI)
+CREATE INDEX idx_ais_mmsi ON staging_ais_data (mmsi);
+
+-- Indice "potenziato" per analisi avanzate (MMSI + Tempo decrescente)
+CREATE INDEX idx_ais_mmsi_time ON staging_ais_data (mmsi, timestamp_utc DESC);
+
 ### 2. Architettura Star Schema (Data Warehouse Design)
 Abbiamo progettato la separazione dei dati in **Fatti** e **Dimensioni** per massimizzare l'efficienza delle JOIN e mantenere l'integrità referenziale:
 
