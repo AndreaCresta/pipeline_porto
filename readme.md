@@ -151,6 +151,7 @@ Per garantire la scalabilità della pipeline e gestire migliaia di record AIS in
 * **`idx_ais_mmsi`**: Indice per ottimizzare il raggruppamento e il filtraggio dei messaggi appartenenti alla medesima unità navale.
 * **`idx_ais_mmsi_time`**: Indice composito (`mmsi`, `timestamp_utc DESC`) progettato specificamente per le query di ricostruzione della rotta, riducendo drasticamente i tempi di esecuzione per la ricerca dell'ultima posizione nota.
 
+```sql
 -- Indice per velocizzare le ricerche cronologiche
 CREATE INDEX idx_ais_timestamp ON staging_ais_data (timestamp_utc);
 
@@ -159,6 +160,7 @@ CREATE INDEX idx_ais_mmsi ON staging_ais_data (mmsi);
 
 -- Indice "potenziato" per analisi avanzate (MMSI + Tempo decrescente)
 CREATE INDEX idx_ais_mmsi_time ON staging_ais_data (mmsi, timestamp_utc DESC);
+```
 
 ### 2. Architettura Star Schema (Data Warehouse Design)
 
@@ -172,6 +174,7 @@ L'architettura separa rigorosamente i fatti (eventi dinamici) dalle dimensioni (
   * **`dim_terminal`**: Contiene la definizione geografica (poligoni di Geofencing) dei terminal monitorati, quali Genova Voltri (PSA Pra'), Genova Sampierdarena e Vado Gateway. Rende le interrogazioni geografiche indipendenti dal codice applicativo Python.
   * **`dim_tempo`**: Gerarchia temporale (Ora, Giorno, Mese) pianificata per le analisi aggregate, essenziale per identificare pattern ciclici di congestione.
 
+```sql
 -- 1. Creiamo la struttura della tabella Dimensione Navi
 CREATE TABLE dim_navi (
     mmsi VARCHAR(20) PRIMARY KEY,
@@ -185,6 +188,7 @@ SELECT DISTINCT mmsi, ship_name
 FROM staging_ais_data
 WHERE mmsi IS NOT NULL
 ON CONFLICT (mmsi) DO NOTHING;
+```
 
 * **Tabella dei Fatti (Eventi):**
   * **`fact_movimenti`**: È il cuore del sistema analitico. Registra esclusivamente gli eventi di "Ingresso" e "Uscita" dalle aree terminal, relazionando l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
