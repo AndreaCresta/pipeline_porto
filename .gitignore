@@ -1,9 +1,41 @@
-# Ignora i log di Airflow
+# =========================
+# APACHE AIRFLOW
+# =========================
 logs/
+airflow-webserver.pid
+airflow.cfg
+webserver_config.py
+standalone_admin_password.txt
 
-# Ignora le cache di Python
+# =========================
+# PYTHON & AMBIENTI VIRTUALI
+# =========================
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+# Ignora le cartelle degli ambienti virtuali (molto pesanti!)
+tesi_env/
+venv/
+env/
 
-# Ignora eventuali file di ambiente con password
+# =========================
+# DOCKER & SICUREZZA
+# =========================
 .env
+docker-compose.override.yml
+
+# =========================
+# SISTEMA OPERATIVO (MAC OS)
+# =========================
+# File invisibili che il Mac crea ovunque e che sporcano GitHub
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# =========================
+# IDE (VS CODE / PYCHARM)
+# =========================
+.vscode/
+.idea/
