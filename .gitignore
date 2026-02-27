@@ -39,3 +39,6 @@ docker-compose.override.yml
 # =========================
 .vscode/
 .idea/
+
+# Ignora TUTTI i file di log, ovunque si trovino
+*.log
