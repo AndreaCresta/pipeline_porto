@@ -7,6 +7,7 @@ Questo repository contiene l'infrastruttura, il codice sorgente e la documentazi
 * **Database:** PostgreSQL 18
 * **ETL & Scripting:** Python 3.12 (psycopg2, websockets, asyncio)
 * **Amministrazione DB:** pgAdmin 4
+* **Automazione/Orchestrazione:** Apache Airflow 2.8.1
 * **Data Visualization & BI:** Microsoft Power BI
 
 ---
@@ -65,7 +66,7 @@ services:
     container_name: postgres_porto
     environment:
       POSTGRES_USER: admin_tesi
-      POSTGRES_PASSWORD: password_sicura
+      POSTGRES_PASSWORD: [INSERISCI LA TUA PASSWORD]
       POSTGRES_DB: logistica_liguria
     ports:
       - "5432:5432"
@@ -77,7 +78,7 @@ services:
     container_name: pgadmin_interfaccia
     environment:
       PGADMIN_DEFAULT_EMAIL: studente@tesi.it
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_PASSWORD: [INSERISCI LA TUA PASSWORD]
     ports:
       - "8080:80"
     depends_on:
@@ -121,7 +122,7 @@ DB_CONFIG = {
     "port": "5432",
     "database": "logistica_liguria",
     "user": "admin_tesi",
-    "password": "password_sicura"
+    "password": "[INSERISCI LA TUA PASSWORD]"
 }
 
 def identifica_terminal(lat, lon):
@@ -478,8 +479,120 @@ L'ambiente containerizzato è stato espanso per includere i micro-servizi di Air
 
 Tutti i servizi comunicano internamente tramite una rete Docker dedicata (`tesi_network`), garantendo la risoluzione sicura dei nomi host (l'operatore Airflow si connette al servizio `db_tesi` per l'esecuzione delle query tramite SQLAlchemy).
 
+```yaml
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.8.1
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin_tesi:password_sicura@db_tesi:5432/logistica_liguria
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  depends_on:
+    - db_tesi
+  networks:
+    - tesi_network
+
+services:
+  db_tesi:
+    image: postgres:15
+    container_name: postgres_porto
+    environment:
+      POSTGRES_USER: admin_tesi
+      POSTGRES_PASSWORD: [INSERISCI LA TUA PASSWORD]
+      POSTGRES_DB: logistica_liguria
+    ports:
+      - "5432:5432"
+    volumes:
+      - dati_porto:/var/lib/postgresql/data
+    networks:
+      - tesi_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_interfaccia
+    environment:
+      PGADMIN_DEFAULT_EMAIL: studente@tesi.it
+      PGADMIN_DEFAULT_PASSWORD: [INSERISCI LA TUA PASSWORD]
+    ports:
+      - "8080:80"
+    depends_on:
+      - db_tesi
+    networks:
+      - tesi_network
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    command: version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: [INSERISCI LA TUA PASSWORD]
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: webserver
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      - db_tesi
+      - airflow-init
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: scheduler
+    depends_on:
+      - db_tesi
+      - airflow-init
+
+volumes:
+  dati_porto:
+
+
+networks:
+  tesi_network:
+    driver: bridge
+```
+
 ### 3.2 Progettazione del DAG (Directed Acyclic Graph)
 La logica di aggiornamento è stata codificata in Python all'interno del file `pipeline_logistica.py`. Il DAG, denominato `pipeline_mar_ligure_completa`, esegue 5 task distinti ed è stato progettato per rispondere a tre requisiti fondamentali del Data Engineering: **Integrità del dato, Idempotenza ed Esecuzione Parallela**.
+
+```python
+from airflow import DAG
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from datetime import datetime, timedelta
+
+default_args = {
+    'owner': 'andrea',
+    'depends_on_past': False,
+    'start_date': datetime(2023, 1, 1),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
+
+with DAG(
+    'pipeline_mar_ligure_completa', 
+    default_args=default_args,
+    description='Pipeline ETL completa: Cleansing, Dimensioni e Fatti',
+    schedule='*/5 * * * *',
+    catchup=False,
+    tags=['logistica', 'tesi', 'produzione'],
+) as dag:
+```
 
 #### 3.2.1 Data Cleansing Automatizzato
 Come teorizzato nella progettazione logica del database, il primo step della pipeline garantisce l'affidabilità dei KPI pulendo la tabella di staging dalle anomalie prima di procedere a qualsiasi calcolo.
