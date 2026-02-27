@@ -82,7 +82,7 @@ services:
     networks:
       - tesi_network
     depends_on:
-      - db_tesi
+      - postgres
 
 volumes:
   dati_porto:
