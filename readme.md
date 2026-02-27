@@ -461,11 +461,152 @@ WHERE a.ctid < b.ctid
 
 ```
 
+
+---
+
+## Fase 3: Orchestrazione e Automazione (Apache Airflow)
+
+Per trasformare il modello logico sviluppato nella Fase 2 in una vera pipeline ETL di produzione (Data Warehouse automatizzato), ho introdotto **Apache Airflow** come motore di orchestrazione. Questo strumento permette di schedulare, monitorare e gestire le dipendenze dei flussi di trasformazione dati, garantendo che le logiche di business vengano applicate in modo sequenziale, scalabile e resiliente.
+
+Per avvicinare l'architettura a un sistema **Near Real-Time** (fondamentale per il monitoraggio logistico in porto), ho abbandonato l'elaborazione oraria standard in favore di un approccio di **Micro-batching**, schedulando l'esecuzione della pipeline ogni 5 minuti tramite espressione Cron (`*/5 * * * *`).
+
+### 3.1 Evoluzione dell'Infrastruttura (Docker Compose)
+L'ambiente containerizzato è stato espanso per includere i micro-servizi di Airflow, affiancandoli al database PostgreSQL. L'infrastruttura ora comprende:
+* **`airflow-init`**: Container effimero dedicato alla creazione dei metadati iniziali e dell'utente amministratore.
+* **`airflow-webserver`**: Espone l'interfaccia di monitoraggio (UI) sulla porta `8081`.
+* **`airflow-scheduler`**: Il demone che valuta le tempistiche (ogni 5 minuti) e le dipendenze per innescare l'esecuzione dei task Python.
+
+Tutti i servizi comunicano internamente tramite una rete Docker dedicata (`tesi_network`), garantendo la risoluzione sicura dei nomi host (l'operatore Airflow si connette al servizio `db_tesi` per l'esecuzione delle query tramite SQLAlchemy).
+
+### 3.2 Progettazione del DAG (Directed Acyclic Graph)
+La logica di aggiornamento è stata codificata in Python all'interno del file `pipeline_logistica.py`. Il DAG, denominato `pipeline_mar_ligure_completa`, esegue 5 task distinti ed è stato progettato per rispondere a tre requisiti fondamentali del Data Engineering: **Integrità del dato, Idempotenza ed Esecuzione Parallela**.
+
+#### 3.2.1 Data Cleansing Automatizzato
+Come teorizzato nella progettazione logica del database, il primo step della pipeline garantisce l'affidabilità dei KPI pulendo la tabella di staging dalle anomalie prima di procedere a qualsiasi calcolo.
+* **`pulisci_coordinate_nulle`**: Rimuove i "Ghost Ping" (record con `lat` o `lon` mancanti).
+* **`deduplica_staging`**: Rimuove i messaggi identici inviati dalla stessa nave nello stesso istante, mantenendo solo il record più recente tramite il puntatore fisico `ctid`.
+
+```python
+    # TASK 1: Pulizia coordinate mancanti
+    pulisci_coordinate_nulle = SQLExecuteQueryOperator(
+        task_id='pulisci_coordinate_nulle',
+        conn_id='connessione_db_tesi', 
+        sql="DELETE FROM staging_ais_data WHERE lat IS NULL OR lon IS NULL;"
+    )
+
+    # TASK 2: Deduplicazione tecnica
+    deduplica_staging = SQLExecuteQueryOperator(
+        task_id='deduplica_staging',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        DELETE FROM staging_ais_data a
+        USING staging_ais_data b
+        WHERE a.ctid < b.ctid 
+          AND a.mmsi = b.mmsi 
+          AND a.timestamp_utc = b.timestamp_utc;
+        """
+    )
+```
+
+#### 3.2.2 Gestione delle Dimensioni (Parallel Processing)
+Nei flussi in tempo reale (come lo streaming AIS), capita frequentemente che un evento (Fatto) faccia riferimento a un'entità (Dimensione) non ancora registrata a sistema, generando il problema delle *"Late Arriving Dimensions"*. 
+Per evitare violazioni dei vincoli di chiave esterna (Foreign Key), la pipeline estrae proattivamente le nuove anagrafiche dalla tabella di staging e le inserisce nelle dimensioni `dim_navi` e `dim_terminal`. 
+
+Per ottimizzare i tempi di elaborazione del micro-batch, i due task vengono **eseguiti in parallelo** dallo Scheduler di Airflow. Entrambi utilizzano il costrutto `ON CONFLICT DO NOTHING` per garantire l'idempotenza, permettendo l'esecuzione continua senza generare errori di duplicazione.
+
+```python
+    # TASK 3A: Aggiorna l'anagrafica delle navi
+    aggiorna_dim_navi = SQLExecuteQueryOperator(
+        task_id='aggiorna_dim_navi',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        INSERT INTO dim_navi (mmsi, ship_name)
+        SELECT mmsi, MAX(ship_name) AS ship_name
+        FROM staging_ais_data
+        WHERE mmsi IS NOT NULL
+        GROUP BY mmsi
+        ON CONFLICT (mmsi) DO NOTHING;
+        """
+    )
+    
+    # TASK 3B: Aggiorna le zone portuali in parallelo
+    aggiorna_dim_terminal = SQLExecuteQueryOperator(
+        task_id='aggiorna_dim_terminal',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        INSERT INTO dim_terminal (codice_zona, nome_esteso, citta)
+        SELECT DISTINCT terminal_zona, terminal_zona, 'Da definire'
+        FROM staging_ais_data
+        WHERE terminal_zona != 'ALTRO_LIGURIA' 
+          AND terminal_zona IS NOT NULL
+        ON CONFLICT (codice_zona) DO NOTHING;
+        """
+    )
+```
+
+#### 3.2.3 Elaborazione dei Tempi di Permanenza (Fact Table)
+Una volta garantita l'integrità referenziale per le dimensioni nave e terminal, il task finale esegue il calcolo effettivo degli arrivi e delle partenze tramite le Window Functions (`LAG` e `LEAD`). Anche questo task è reso idempotente tramite un'istruzione iniziale di `TRUNCATE TABLE fact_movimenti CASCADE`, che previene la duplicazione dei movimenti storicizzati a ogni nuova elaborazione del DAG.
+
+```python
+    # TASK 4: Calcola gli arrivi e le partenze
+    aggiorna_fact_movimenti = SQLExecuteQueryOperator(
+        task_id='aggiorna_fact_movimenti',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        TRUNCATE TABLE fact_movimenti CASCADE;
+        
+        INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo, orario_partenza)
+        WITH cambi_stato AS (
+            SELECT 
+                mmsi,
+                terminal_zona,
+                timestamp_utc,
+                LAG(terminal_zona) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) as zona_precedente
+            FROM staging_ais_data
+            WHERE mmsi IS NOT NULL
+        ),
+        arrivi_partenze AS (
+            SELECT 
+                mmsi,
+                terminal_zona,
+                timestamp_utc AS orario_arrivo,
+                LEAD(timestamp_utc) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) AS orario_partenza
+            FROM cambi_stato
+            WHERE terminal_zona IS DISTINCT FROM zona_precedente
+        )
+        SELECT 
+            mmsi,
+            terminal_zona AS codice_zona,
+            orario_arrivo,
+            orario_partenza
+        FROM arrivi_partenze
+        WHERE terminal_zona != 'ALTRO_LIGURIA' 
+          AND orario_partenza IS NOT NULL;
+        """
+    )
+```
+
+### 3.3 Orchestrazione e Monitoraggio
+Il flusso logico finale è vincolato dalla seguente istruzione Python, che impone al motore di Airflow le corrette dipendenze topologiche:
+
+```python
+# Esecuzione logica: Pulizia -> Aggiornamento Dimensioni in parallelo -> Calcolo Fatti
+pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti
+```
+
+Questa configurazione garantisce che il caricamento della Fact Table avvenga *esclusivamente* se la fase di Data Cleansing e il censimento parallelo delle dimensioni si sono conclusi con successo, preservando l'assoluta coerenza strutturale del Data Warehouse.
+
+<img width="852" alt="airflow_dag_graph" src="https://github.com/user-attachments/assets/INSERISCI_QUI_IL_LINK_DELLA_TUA_IMMAGINE">
+
 ---
 
 ## Fasi Successive del Progetto
 
-* [ ] **Fase 3: Orchestrazione e Automazione (Apache Airflow)**
-  * *Pianificato:* Schedulazione dei processi ETL batch.
+* [x] **Fase 1: Data Ingestion e Setup Infrastrutturale**
+* [x] **Fase 2: Processing & Data Modeling**
+* [x] **Fase 3: Orchestrazione e Automazione (Apache Airflow)**
+* [ ] **Fase 4: Data Visualization & Business Intelligence (Power BI)**
+  * *Pianificato:* Connessione in Import/DirectQuery tra Power BI e le viste materializzate in PostgreSQL per lo sviluppo di una dashboard direzionale, focalizzata sul monitoraggio visivo dei KPI logistici (tempi di ciclo) e degli allarmi di Overstay nei terminal del Mar Ligure.
+
 * [ ] **Fase 4: Data Visualization (Power BI)**
   * *Pianificato:* Sviluppo dashboard interattiva aziendale con metriche di Congestione e allarmi di Overstay.
