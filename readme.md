@@ -295,6 +295,32 @@ Il ciclo logistico della nave viene frammentato e calcolato in due fasi distinte
 * **Time in Rada (Waiting Time):** Misura il tempo che la nave trascorre nell'area di ancoraggio (identificata come transito o attesa nel Mar Ligure) prima di ricevere l'autorizzazione all'ormeggio. Un valore medio alto in questo KPI è il principale indicatore di congestione del terminal.
 * **Time in Port (Dwell Time):** Calcolato come differenza matematica tra il timestamp di uscita e quello di entrata dalla zona di geofencing del terminal (`orario_partenza - orario_arrivo`). Rappresenta il tempo effettivo di operatività per il carico/scarico container.
 
+```sql
+
+-- Creazione della Vista per il calcolo del Time in Port e Overstay
+CREATE OR REPLACE VIEW vw_kpi_tempi_porto AS
+SELECT 
+    m.id_movimento,
+    m.mmsi,
+    n.ship_name,
+    t.nome_esteso AS terminal,
+    m.orario_arrivo,
+    m.orario_partenza,
+    -- 1. Calcolo della permanenza esatta (Giorni e Ore)
+    (m.orario_partenza - m.orario_arrivo) AS permanenza_totale,
+    -- 2. Calcolo della permanenza in ore decimali (Perfetto per i grafici di Power BI)
+    ROUND(EXTRACT(EPOCH FROM (m.orario_partenza - m.orario_arrivo)) / 3600, 2) AS ore_in_porto,
+    -- 3. Identificazione Overstay (Flag Vero/Falso se la sosta supera le 72 ore)
+    CASE 
+        WHEN EXTRACT(EPOCH FROM (m.orario_partenza - m.orario_arrivo)) / 3600 > 72 THEN TRUE 
+        ELSE FALSE 
+    END AS flag_overstay
+FROM fact_movimenti m
+LEFT JOIN dim_navi n ON m.mmsi = n.mmsi
+LEFT JOIN dim_terminal t ON m.codice_zona = t.codice_zona;
+
+```
+
 #### 3.2. Identificazione Anomalie e Overstay
 Tramite viste SQL materializzate, il sistema filtra automaticamente i dati per far emergere i casi critici (Outliers):
 * **Overstay al Molo:** Identificazione delle navi che superano le soglie standard di permanenza (es. > 72 ore al Vado Gateway), segnalando possibili guasti, ispezioni doganali o inefficienze nelle operazioni di piazzale.
