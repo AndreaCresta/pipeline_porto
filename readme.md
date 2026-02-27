@@ -1,6 +1,6 @@
 # Sviluppo di una pipeline ETL automatizzata per il monitoraggio dei dati AIS nel traffico marittimo del Porto di Genova
 
-Questo repository contiene l'infrastruttura, il codice sorgente e la documentazione del mio progetto di tesi in Data Engineering. Il sistema è progettato per intercettare, trasformare e storicizzare in tempo reale i dati del traffico marittimo (AIS) nei principali terminal della Liguria, con l'obiettivo di calcolare KPI logistici avanzati (tempi di attesa, congestione, overstay).
+Questo repository contiene l'infrastruttura, il codice sorgente e la documentazione del mio progetto di tesi nel campo del Data Engineering. Il sistema è progettato per intercettare, trasformare e storicizzare in tempo reale i dati del traffico marittimo (AIS) nei principali terminal della Liguria, con l'obiettivo di calcolare KPI logistici avanzati (tempi di attesa, congestione, overstay).
 
 ## Stack Tecnologico
 * **Infrastruttura:** Docker, Docker Compose
