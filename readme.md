@@ -288,11 +288,22 @@ WHERE terminal_zona != 'ALTRO_LIGURIA'
 
 ### 3. Logica di Business e KPI Logistici
 
-La modellazione appena descritta è ingegnerizzata per calcolare in automatico tre metriche/procedure fondamentali per la gestione portuale:
+La modellazione e le pipeline SQL sono state ingegnerizzate per estrarre tre livelli di metriche fondamentali per l'analisi delle performance e la gestione portuale:
 
-1. **Time in Port (Dwell Time):** Calcolo automatizzato della permanenza al molo per ogni singolo scalo, ottenuto tramite la semplice differenza matematica (`orario_partenza - orario_arrivo`).
-2. **Identificazione Zone di Sosta e Overstay:** Filtraggio avanzato per isolare i movimenti all'interno dei terminal liguri e identificare anomalie nei tempi di attesa o colli di bottiglia infrastrutturali.
-3. **Data Cleansing:** Procedure SQL automatizzate per la rimozione di coordinate outlier (dati sballati) o duplicati tecnici generati dal flusso WebSocket continuo.
+#### 3.1. Analisi dei Tempi di Ciclo (Turnaround Time)
+Il ciclo logistico della nave viene frammentato e calcolato in due fasi distinte per isolare le inefficienze:
+* **Time in Rada (Waiting Time):** Misura il tempo che la nave trascorre nell'area di ancoraggio (identificata come transito o attesa nel Mar Ligure) prima di ricevere l'autorizzazione all'ormeggio. Un valore medio alto in questo KPI è il principale indicatore di congestione del terminal.
+* **Time in Port (Dwell Time):** Calcolato come differenza matematica tra il timestamp di uscita e quello di entrata dalla zona di geofencing del terminal (`orario_partenza - orario_arrivo`). Rappresenta il tempo effettivo di operatività per il carico/scarico container.
+
+#### 3.2. Identificazione Anomalie e Overstay
+Tramite viste SQL materializzate, il sistema filtra automaticamente i dati per far emergere i casi critici (Outliers):
+* **Overstay al Molo:** Identificazione delle navi che superano le soglie standard di permanenza (es. > 72 ore al Vado Gateway), segnalando possibili guasti, ispezioni doganali o inefficienze nelle operazioni di piazzale.
+* **Colli di Bottiglia Infrastrutturali:** Mappatura delle zone (es. Voltri vs. Sampierdarena) con i più alti tempi di attesa medi, fornendo dati cruciali per l'ottimizzazione dei flussi.
+
+#### 3.3. Data Cleansing e Integrità
+Per garantire l'affidabilità dei KPI, sono state automatizzate procedure di pulizia del dato a livello di database:
+* Rimozione dei "rimbalzi GPS" (Ghost Ping) e delle coordinate outlier generate da errori di trasmissione dell'antenna AIS.
+* Deduplicazione tecnica degli eventi per assicurare che ogni scalo nave generi un singolo record fattuale nella tabella `fact_movimenti`.
 
 ## ⚙️ Guida all'Installazione e Avvio Rapido
 
