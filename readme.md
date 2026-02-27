@@ -165,7 +165,7 @@ async def get_port_data():
 asyncio.run(get_port_data())
 ```
 
-<img width="2463" height="1311" alt="Screenshot 2026-02-27 alle 14 59 32" src="https://github.com/user-attachments/assets/328f634a-be04-4fb5-b50f-9198e631018a" />
+<img width="2463" height="1311" alt="stagin_ais_data" src="https://github.com/user-attachments/assets/df8d481b-aa13-48a8-a72a-83ac67152473" />
 
 
 ---
