@@ -140,6 +140,34 @@ asyncio.run(get_port_data())
 
 ---
 
+## 🧠 Fase 2: Processing & Data Modeling (Settimane 3-5)
+
+[cite_start]L'obiettivo di questa fase è la trasformazione del dato "grezzo" (Raw Data) in "informazione strutturata" (Analytics-Ready Data) per rispondere ai requisiti logistici della tesi[cite: 50]. [cite_start]In questa fase, il sistema evolve da una singola tabella di atterraggio a uno **Star Schema** ottimizzato per il calcolo dei KPI[cite: 52].
+
+### 1. Ottimizzazione e Performance (Indexing)
+[cite_start]Per garantire la scalabilità della pipeline e gestire migliaia di record AIS in tempo reale, sono stati implementati indici specializzati sulla tabella di staging[cite: 15, 60]:
+
+* **`idx_ais_timestamp`**: Indice B-Tree sulla colonna `timestamp_utc` per velocizzare le query di ordinamento temporale e il partizionamento logico dei dati.
+* **`idx_ais_mmsi`**: Indice per ottimizzare il raggruppamento e il filtraggio dei messaggi appartenenti alla medesima unità navale.
+* **`idx_ais_mmsi_time`**: Indice composito (`mmsi`, `timestamp_utc DESC`) progettato specificamente per le query di ricostruzione della rotta, riducendo drasticamente i tempi di esecuzione per la ricerca dell'ultima posizione nota.
+
+### 2. Architettura Star Schema (Data Warehouse Design)
+[cite_start]Abbiamo progettato la separazione dei dati in **Fatti** e **Dimensioni** per massimizzare l'efficienza delle JOIN e mantenere l'integrità referenziale[cite: 11, 51]:
+
+#### **Tabelle Dimensione (Anagrafiche)**
+* **`dim_navi`**: Memorizza i dati statici delle navi (MMSI, Ship Name). [cite_start]Risolve il problema della ridondanza presente nello staging, dove il nome della nave viene ripetuto per ogni posizione inviata[cite: 53].
+* [cite_start]**`dim_terminal`**: Contiene la definizione geografica (poligoni di Geofencing) dei terminal di **Genova Voltri (PSA Pra')**, **Genova Sampierdarena** e **Vado Gateway**[cite: 14, 58].
+* **`dim_tempo`**: (Pianificata) Gerarchia temporale per analisi aggregate su base oraria, giornaliera e mensile.
+
+#### **Tabella dei Fatti (Eventi)**
+* **`fact_movimenti`**: Tabella centrale che registra esclusivamente gli eventi di **"Ingresso"** e **"Uscita"** dalle aree terminal. [cite_start]Ogni riga rappresenta un cambiamento di stato logistico della nave[cite: 11, 53].
+
+### 3. Logica di Business e KPI Logistici
+La modellazione è finalizzata al calcolo automatico di tre metriche fondamentali per la gestione portuale:
+1.  [cite_start]**Time in Port (Dwell Time)**: Calcolato come differenza temporale tra l'evento di uscita e l'evento di ingresso per ogni singolo scalo[cite: 13, 56].
+2.  [cite_start]**Identificazione Zone di Sosta**: Filtraggio dei dati per isolare i movimenti all'interno dei terminal specifici della Liguria[cite: 14, 58].
+3.  [cite_start]**Data Cleansing**: Procedure SQL per la rimozione di coordinate outlier o duplicati tecnici generati dal flusso WebSocket[cite: 54].
+
 ## ⚙️ Guida all'Installazione e Avvio Rapido
 
 Per replicare l'ambiente di sviluppo in locale, seguire questi passaggi:
