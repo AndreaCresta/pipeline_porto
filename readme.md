@@ -20,6 +20,33 @@ Questo repository contiene l'infrastruttura, il codice sorgente e la documentazi
 └── README.md                # Documentazione di progetto
 ```
 
+## ⚙️ Guida all'Installazione e Avvio Rapido
+
+Per replicare l'ambiente di sviluppo in locale, seguire questi passaggi:
+
+1. **Avvio Infrastruttura Docker**
+   Avviare il demone Docker e lanciare i container in background:
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Creazione Tabella**
+   Accedere a pgAdmin (`http://localhost:8080`), registrare il server puntando all'host `db_tesi` ed eseguire lo script `schema.sql` all'interno del database.
+
+3. **Setup Ambiente Python (macOS PEP 668)**
+   Per rispettare le restrizioni di sicurezza su macOS, ho isolato le dipendenze in un ambiente virtuale:
+   ```bash
+   python3 -m venv tesi_env
+   source tesi_env/bin/activate
+   pip install websockets psycopg2-binary
+   ```
+
+4. **Avvio Ingestion**
+   Lanciare l'ascolto in tempo reale:
+   ```bash
+   python3 ingestion_pipeline.py
+   ```
+
 ---
 
 ## 🚀 Fase 1: Data Ingestion e Setup Infrastrutturale (Completata)
@@ -145,7 +172,7 @@ asyncio.run(get_port_data())
 L'obiettivo di questa fase è la trasformazione del dato "grezzo" (Raw Data) in "informazione strutturata" (Analytics-Ready Data) per rispondere ai requisiti logistici della tesi. In questa fase, il sistema evolve da una singola tabella di atterraggio a uno **Star Schema** ottimizzato per il calcolo dei KPI.
 
 ### 1. Ottimizzazione e Performance (Indexing)
-Per garantire la scalabilità della pipeline e gestire migliaia di record AIS in tempo reale, sono stati implementati indici specializzati sulla tabella di staging:
+Per garantire la scalabilità della pipeline e gestire migliaia di record AIS in tempo reale, ho implementato indici specializzati sulla tabella di staging:
 
 * **`idx_ais_timestamp`**: Indice B-Tree sulla colonna `timestamp_utc` per velocizzare le query di ordinamento temporale e il partizionamento logico dei dati.
 * **`idx_ais_mmsi`**: Indice per ottimizzare il raggruppamento e il filtraggio dei messaggi appartenenti alla medesima unità navale.
@@ -431,38 +458,11 @@ WHERE a.ctid < b.ctid
 
 ```
 
-## ⚙️ Guida all'Installazione e Avvio Rapido
-
-Per replicare l'ambiente di sviluppo in locale, seguire questi passaggi:
-
-1. **Avvio Infrastruttura Docker**
-   Avviare il demone Docker e lanciare i container in background:
-   ```bash
-   docker-compose up -d
-   ```
-
-2. **Creazione Tabella**
-   Accedere a pgAdmin (`http://localhost:8080`), registrare il server puntando all'host `db_tesi` ed eseguire lo script `schema.sql` all'interno del database.
-
-3. **Setup Ambiente Python (macOS PEP 668)**
-   Per rispettare le restrizioni di sicurezza su macOS, ho isolato le dipendenze in un ambiente virtuale:
-   ```bash
-   python3 -m venv tesi_env
-   source tesi_env/bin/activate
-   pip install websockets psycopg2-binary
-   ```
-
-4. **Avvio Ingestion**
-   Lanciare l'ascolto in tempo reale:
-   ```bash
-   python3 ingestion_pipeline.py
-   ```
-
 ---
 
 ## 🔜 Fasi Successive del Progetto
 
-* [ ] **Fase 3: Orchestrazione (Apache Airflow)**
+* [ ] **Fase 3: Orchestrazione e Automazione (Apache Airflow)**
   * *Pianificato:* Schedulazione dei processi ETL batch.
 * [ ] **Fase 4: Data Visualization (Power BI)**
   * *Pianificato:* Sviluppo dashboard interattiva aziendale con metriche di Congestione e allarmi di Overstay.
