@@ -74,6 +74,15 @@ services:
     depends_on:
       - db_tesi
       - airflow-init
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase_tesi
+    ports:
+      - "3000:3000"
+    networks:
+      - tesi_network
+    depends_on:
+      - db_tesi
 
 volumes:
   dati_porto:
