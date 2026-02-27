@@ -7,7 +7,7 @@ Questo repository contiene l'infrastruttura, il codice sorgente e la documentazi
 * **Database:** PostgreSQL 18
 * **ETL & Scripting:** Python 3.12 (psycopg2, websockets, asyncio)
 * **Amministrazione DB:** pgAdmin 4
-* **Data Visualization & BI:** Microsoft Power BI (Pianificato per Fase 4)
+* **Data Visualization & BI:** Microsoft Power BI
 
 ---
 
