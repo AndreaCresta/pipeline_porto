@@ -294,6 +294,20 @@ La modellazione e le pipeline SQL sono state ingegnerizzate per estrarre tre liv
 Il ciclo logistico della nave viene frammentato e calcolato in due fasi distinte per isolare le inefficienze:
 * **Time in Rada (Waiting Time):** Misura il tempo che la nave trascorre nell'area di ancoraggio (identificata come transito o attesa nel Mar Ligure) prima di ricevere l'autorizzazione all'ormeggio. Un valore medio alto in questo KPI è il principale indicatore di congestione del terminal.
 
+```sql
+
+-- Query di controllo per identificare i tempi di attesa medi e i picchi di congestione
+SELECT 
+    ship_name, 
+    orario_inizio_rada, 
+    orario_fine_rada, 
+    ore_in_rada 
+FROM vw_kpi_tempi_rada
+WHERE ore_in_rada > 1.0  -- Filtriamo solo le attese significative superiori a un'ora
+ORDER BY ore_in_rada DESC;
+
+```
+
 * **Vista SQL per il calcolo del Time in Rada (Attesa in mare):**
   Questa vista riutilizza la logica delle Window Functions per isolare i periodi di transito o attesa fuori dai terminal logistici, calcolando le ore di permanenza nella zona "ALTRO_LIGURIA".
 
