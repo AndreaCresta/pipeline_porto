@@ -293,6 +293,43 @@ La modellazione e le pipeline SQL sono state ingegnerizzate per estrarre tre liv
 #### 3.1. Analisi dei Tempi di Ciclo (Turnaround Time)
 Il ciclo logistico della nave viene frammentato e calcolato in due fasi distinte per isolare le inefficienze:
 * **Time in Rada (Waiting Time):** Misura il tempo che la nave trascorre nell'area di ancoraggio (identificata come transito o attesa nel Mar Ligure) prima di ricevere l'autorizzazione all'ormeggio. Un valore medio alto in questo KPI è il principale indicatore di congestione del terminal.
+
+* **Vista SQL per il calcolo del Time in Rada (Attesa in mare):**
+  Questa vista riutilizza la logica delle Window Functions per isolare i periodi di transito o attesa fuori dai terminal logistici, calcolando le ore di permanenza nella zona "ALTRO_LIGURIA".
+
+```sql
+-- Creazione della Vista per il calcolo del Time in Rada (Attesa)
+CREATE OR REPLACE VIEW vw_kpi_tempi_rada AS
+WITH cambi_stato AS (
+    SELECT 
+        mmsi,
+        terminal_zona,
+        timestamp_utc,
+        LAG(terminal_zona) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) as zona_precedente
+    FROM staging_ais_data
+    WHERE mmsi IS NOT NULL
+),
+arrivi_partenze_rada AS (
+    SELECT 
+        mmsi,
+        terminal_zona,
+        timestamp_utc AS orario_inizio_rada,
+        LEAD(timestamp_utc) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) AS orario_fine_rada
+    FROM cambi_stato
+    WHERE terminal_zona IS DISTINCT FROM zona_precedente
+)
+SELECT 
+    r.mmsi,
+    n.ship_name,
+    r.orario_inizio_rada,
+    r.orario_fine_rada,
+    ROUND(EXTRACT(EPOCH FROM (r.orario_fine_rada - r.orario_inizio_rada)) / 3600, 2) AS ore_in_rada
+FROM arrivi_partenze_rada r
+LEFT JOIN dim_navi n ON r.mmsi = n.mmsi
+WHERE r.terminal_zona = 'ALTRO_LIGURIA' 
+  AND r.orario_fine_rada IS NOT NULL;
+```
+
 * **Time in Port (Dwell Time):** Calcolato come differenza matematica tra il timestamp di uscita e quello di entrata dalla zona di geofencing del terminal (`orario_partenza - orario_arrivo`). Rappresenta il tempo effettivo di operatività per il carico/scarico container.
 
 ```sql
