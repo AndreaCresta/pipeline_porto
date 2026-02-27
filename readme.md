@@ -190,6 +190,47 @@ WHERE mmsi IS NOT NULL
 ON CONFLICT (mmsi) DO NOTHING;
 ```
 
+```sql
+
+CREATE TABLE dim_terminal (
+    codice_zona VARCHAR(50) PRIMARY KEY,
+    nome_esteso TEXT,
+    citta TEXT
+);
+
+
+INSERT INTO dim_terminal (codice_zona, nome_esteso, citta) VALUES
+('GENOVA_VOLTRI', 'PSA Pra''', 'Genova'),
+('GENOVA_SAMPIERDARENA', 'Terminal Sampierdarena', 'Genova'),
+('VADO_GATEWAY', 'Vado Gateway Terminal', 'Savona'),
+('ALTRO_LIGURIA', 'Mar Ligure (In Transito)', 'N/A')
+ON CONFLICT (codice_zona) DO NOTHING;
+```
+
+```sql
+
+CREATE TABLE dim_tempo (
+    data_id DATE PRIMARY KEY,
+    anno INT,
+    mese INT,
+    giorno INT,
+    nome_giorno VARCHAR(20),
+    is_weekend BOOLEAN
+);
+
+
+INSERT INTO dim_tempo (data_id, anno, mese, giorno, nome_giorno, is_weekend)
+SELECT 
+    datum AS data_id,
+    EXTRACT(YEAR FROM datum) AS anno,
+    EXTRACT(MONTH FROM datum) AS mese,
+    EXTRACT(DAY FROM datum) AS giorno,
+    TO_CHAR(datum, 'Day') AS nome_giorno,
+    EXTRACT(ISODOW FROM datum) IN (6, 7) AS is_weekend
+FROM generate_series('2024-01-01'::DATE, '2026-12-31'::DATE, '1 day'::interval) AS datum
+ON CONFLICT (data_id) DO NOTHING;
+```
+
 * **Tabella dei Fatti (Eventi):**
   * **`fact_movimenti`**: È il cuore del sistema analitico. Registra esclusivamente gli eventi di "Ingresso" e "Uscita" dalle aree terminal, relazionando l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
 
