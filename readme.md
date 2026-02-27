@@ -171,6 +171,23 @@ L'architettura separa rigorosamente i fatti (eventi dinamici) dalle dimensioni (
 
 * **Tabelle Dimensione (Anagrafiche):**
   * **`dim_navi`**: Memorizza i dati statici delle navi, come il codice MMSI e il nome (Ship Name). Risolve il problema della ridondanza presente nello staging, dove il nome della nave viene inutilmente ripetuto per ogni singola coordinata inviata.
+
+```sql
+
+CREATE TABLE dim_navi (
+    mmsi VARCHAR(20) PRIMARY KEY,
+    ship_name TEXT,
+    data_inserimento TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+INSERT INTO dim_navi (mmsi, ship_name)
+SELECT DISTINCT mmsi, ship_name
+FROM staging_ais_data
+WHERE mmsi IS NOT NULL
+ON CONFLICT (mmsi) DO NOTHING;
+```  
+
   * **`dim_terminal`**: Contiene la definizione geografica (poligoni di Geofencing) dei terminal monitorati, quali Genova Voltri (PSA Pra'), Genova Sampierdarena e Vado Gateway. Rende le interrogazioni geografiche indipendenti dal codice applicativo Python.
   * **`dim_tempo`**: Gerarchia temporale (Ora, Giorno, Mese) pianificata per le analisi aggregate, essenziale per identificare pattern ciclici di congestione.
 
