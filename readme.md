@@ -172,6 +172,20 @@ L'architettura separa rigorosamente i fatti (eventi dinamici) dalle dimensioni (
   * **`dim_terminal`**: Contiene la definizione geografica (poligoni di Geofencing) dei terminal monitorati, quali Genova Voltri (PSA Pra'), Genova Sampierdarena e Vado Gateway. Rende le interrogazioni geografiche indipendenti dal codice applicativo Python.
   * **`dim_tempo`**: Gerarchia temporale (Ora, Giorno, Mese) pianificata per le analisi aggregate, essenziale per identificare pattern ciclici di congestione.
 
+-- 1. Creiamo la struttura della tabella Dimensione Navi
+CREATE TABLE dim_navi (
+    mmsi VARCHAR(20) PRIMARY KEY,
+    ship_name TEXT,
+    data_inserimento TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Popoliamo la tabella estraendo le navi UNICHE dallo staging
+INSERT INTO dim_navi (mmsi, ship_name)
+SELECT DISTINCT mmsi, ship_name
+FROM staging_ais_data
+WHERE mmsi IS NOT NULL
+ON CONFLICT (mmsi) DO NOTHING;
+
 * **Tabella dei Fatti (Eventi):**
   * **`fact_movimenti`**: È il cuore del sistema analitico. Registra esclusivamente gli eventi di "Ingresso" e "Uscita" dalle aree terminal, relazionando l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
 
