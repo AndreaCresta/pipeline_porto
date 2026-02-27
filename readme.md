@@ -162,42 +162,36 @@ CREATE INDEX idx_ais_mmsi_time ON staging_ais_data (mmsi, timestamp_utc DESC);
 
 ### 2. Architettura Star Schema (Data Warehouse Design)
 
-Per trasformare il flusso continuo di dati AIS in metriche logistiche interrogabili, il processo di Data Engineering è stato suddiviso in 4 step sequenziali. Questo approccio garantisce l'integrità del dato e l'ottimizzazione delle performance del database.
+Per trasformare il flusso continuo di dati AIS in metriche logistiche interrogabili, il processo di Data Engineering è stato strutturato attorno a un modello a stella (Star Schema). Questo approccio garantisce l'integrità del dato, elimina le ridondanze e ottimizza le performance del database per le analisi logistico-portuali.
 
-#### Step 1: Costruzione delle Dimensioni (Anagrafiche)
-Il primo passaggio consiste nell'estrarre le informazioni statiche dalla tabella di staging temporanea per popolare le tabelle satellite dello Star Schema.
-* **`dim_navi`**: Creazione di un'anagrafica univoca basata sul codice MMSI (Primary Key) per eliminare la ridondanza dei nomi nave ripetuti ad ogni ping GPS.
-* **`dim_terminal`**: Definizione a database delle zone di geofencing (Genova Voltri, Vado Gateway, ecc.) per rendere le query geografiche indipendenti dal codice applicativo.
+#### 2.1 Le Tabelle del Modello
+L'architettura separa rigorosamente i fatti (eventi dinamici) dalle dimensioni (anagrafiche e dati di contesto):
 
-#### Step 2: Rilevamento degli Eventi Logistici (Window Functions)
-I dati AIS forniscono posizioni assolute, ma per la logistica servono eventi di stato. 
-* Verranno implementate query SQL avanzate utilizzando funzioni analitiche (es. `LAG()`) per confrontare cronologicamente i record di una stessa nave.
-* **Trigger di Arrivo/Partenza**: Un cambio di stato nella colonna `terminal_zona` tra il record al tempo *T* e il record al tempo *T-1* identificherà matematicamente l'ingresso o l'uscita da un molo.
+* **Tabelle Dimensione (Anagrafiche):**
+  * **`dim_navi`**: Memorizza i dati statici delle navi, come il codice MMSI e il nome (Ship Name). Risolve il problema della ridondanza presente nello staging, dove il nome della nave viene inutilmente ripetuto per ogni singola coordinata inviata.
+  * **`dim_terminal`**: Contiene la definizione geografica (poligoni di Geofencing) dei terminal monitorati, quali Genova Voltri (PSA Pra'), Genova Sampierdarena e Vado Gateway. Rende le interrogazioni geografiche indipendenti dal codice applicativo Python.
+  * **`dim_tempo`**: Gerarchia temporale (Ora, Giorno, Mese) pianificata per le analisi aggregate, essenziale per identificare pattern ciclici di congestione.
 
-#### Step 3: Popolamento della Tabella dei Fatti (`fact_movimenti`)
-Gli eventi isolati nello Step 2 verranno consolidati in una tabella centrale ottimizzata.
-* La tabella relazionerà l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
-* Questa struttura ridurrà drasticamente il volume dei dati da interrogare rispetto allo staging grezzo, migliorando le performance in vista dell'integrazione con i tool di BI.
+* **Tabella dei Fatti (Eventi):**
+  * **`fact_movimenti`**: È il cuore del sistema analitico. Registra esclusivamente gli eventi di "Ingresso" e "Uscita" dalle aree terminal, relazionando l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
 
-#### Step 4: Calcolo dei KPI e Materializzazione (Viste SQL)
-L'ultimo step applicativo consiste nella creazione di Viste SQL per astrarre la complessità dei calcoli:
-* **Time in Port**: Calcolo automatizzato della permanenza al molo (`orario_partenza - orario_arrivo`).
-* **Overstay & Congestione**: Filtri applicati alle viste per identificare anomalie nei tempi di attesa e colli di bottiglia nei terminal liguri.
+#### 2.2 Il Flusso di Lavoro (Pipeline ETL in 4 Step)
+Il popolamento del Data Warehouse avviene tramite quattro passaggi sequenziali:
 
+* **Step 1: Costruzione delle Dimensioni:** Estrazione delle informazioni statiche (es. MMSI univoci) dalla tabella di staging temporanea per popolare le tabelle satellite (`dim_navi`, `dim_terminal`).
+* **Step 2: Rilevamento degli Eventi Logistici:** I dati AIS forniscono posizioni assolute, ma per la logistica servono eventi di stato. Vengono implementate query SQL avanzate con funzioni analitiche (es. `LAG()`) per confrontare cronologicamente i record. Un cambio di stato nella colonna `terminal_zona` tra il record al tempo T e quello al tempo T-1 funge da trigger matematico di arrivo o partenza.
+* **Step 3: Popolamento della Tabella dei Fatti:** Consolidamento degli eventi isolati nello Step 2 all'interno di `fact_movimenti`. Questa struttura riduce drasticamente il volume dei dati da interrogare rispetto allo staging grezzo, migliorando le performance per i tool di BI.
+* **Step 4: Astrazione e Materializzazione:** Creazione di Viste SQL (tabelle virtuali) per astrarre la complessità dei calcoli e fornire metriche pronte all'uso per l'analisi.
 
-#### **Tabelle Dimensione (Anagrafiche)**
-* **`dim_navi`**: Memorizza i dati statici delle navi (MMSI, Ship Name). Risolve il problema della ridondanza presente nello staging, dove il nome della nave viene ripetuto per ogni posizione inviata.
-* **`dim_terminal`**: Contiene la definizione geografica (poligoni di Geofencing) dei terminal di **Genova Voltri (PSA Pra')**, **Genova Sampierdarena** e **Vado Gateway**.
-* **`dim_tempo`**: (Pianificata) Gerarchia temporale per analisi aggregate su base oraria, giornaliera e mensile.
-
-#### **Tabella dei Fatti (Eventi)**
-* **`fact_movimenti`**: Tabella centrale che registra esclusivamente gli eventi di **"Ingresso"** e **"Uscita"** dalle aree terminal. Ogni riga rappresenta un cambiamento di stato logistico della nave.
+---
 
 ### 3. Logica di Business e KPI Logistici
-La modellazione è finalizzata al calcolo automatico di tre metriche fondamentali per la gestione portuale:
-1.  **Time in Port (Dwell Time)**: Calcolato come differenza temporale tra l'evento di uscita e l'evento di ingresso per ogni singolo scalo.
-2.  **Identificazione Zone di Sosta**: Filtraggio dei dati per isolare i movimenti all'interno dei terminal specifici della Liguria.
-3.  **Data Cleansing**: Procedure SQL per la rimozione di coordinate outlier o duplicati tecnici generati dal flusso WebSocket.
+
+La modellazione appena descritta è ingegnerizzata per calcolare in automatico tre metriche/procedure fondamentali per la gestione portuale:
+
+1. **Time in Port (Dwell Time):** Calcolo automatizzato della permanenza al molo per ogni singolo scalo, ottenuto tramite la semplice differenza matematica (`orario_partenza - orario_arrivo`).
+2. **Identificazione Zone di Sosta e Overstay:** Filtraggio avanzato per isolare i movimenti all'interno dei terminal liguri e identificare anomalie nei tempi di attesa o colli di bottiglia infrastrutturali.
+3. **Data Cleansing:** Procedure SQL automatizzate per la rimozione di coordinate outlier (dati sballati) o duplicati tecnici generati dal flusso WebSocket continuo.
 
 ## ⚙️ Guida all'Installazione e Avvio Rapido
 
