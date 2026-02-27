@@ -1,0 +1,29 @@
+[2026-02-27T17:31:15.668+0000] {processor.py:161} INFO - Started process (PID=180) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:31:15.668+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:31:15.669+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:15.669+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:31:15.686+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_v1' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:31:15.774+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:15.774+0000] {override.py:1769} INFO - Created Permission View: can delete on DAG:pipeline_mar_ligure_v1
+[2026-02-27T17:31:15.777+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:15.777+0000] {override.py:1769} INFO - Created Permission View: can edit on DAG:pipeline_mar_ligure_v1
+[2026-02-27T17:31:15.779+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:15.779+0000] {override.py:1769} INFO - Created Permission View: can read on DAG:pipeline_mar_ligure_v1
+[2026-02-27T17:31:15.779+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:15.779+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:31:15.783+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:15.783+0000] {dag.py:3058} INFO - Creating ORM DAG for pipeline_mar_ligure_v1
+[2026-02-27T17:31:15.787+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:15.787+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_v1 to 2026-02-27 16:00:00+00:00, run_after=2026-02-27 17:00:00+00:00
+[2026-02-27T17:31:15.794+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.128 seconds
+[2026-02-27T17:31:45.886+0000] {processor.py:161} INFO - Started process (PID=185) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:31:45.886+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:31:45.887+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:45.886+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:31:45.895+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_v1' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:31:45.910+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:45.910+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:31:45.920+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:45.920+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_v1 to 2026-02-27 16:00:00+00:00, run_after=2026-02-27 17:00:00+00:00
+[2026-02-27T17:31:45.928+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.044 seconds
+[2026-02-27T17:31:53.973+0000] {processor.py:161} INFO - Started process (PID=190) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:31:53.974+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:31:53.975+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:53.974+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:31:53.987+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_v2' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:31:54.033+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:54.033+0000] {override.py:1769} INFO - Created Permission View: can delete on DAG:pipeline_mar_ligure_v2
+[2026-02-27T17:31:54.036+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:54.036+0000] {override.py:1769} INFO - Created Permission View: can edit on DAG:pipeline_mar_ligure_v2
+[2026-02-27T17:31:54.038+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:54.038+0000] {override.py:1769} INFO - Created Permission View: can read on DAG:pipeline_mar_ligure_v2
+[2026-02-27T17:31:54.038+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:54.038+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:31:54.042+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:54.042+0000] {dag.py:3058} INFO - Creating ORM DAG for pipeline_mar_ligure_v2
+[2026-02-27T17:31:54.045+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:31:54.045+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_v2 to 2026-02-27 16:00:00+00:00, run_after=2026-02-27 17:00:00+00:00
+[2026-02-27T17:31:54.052+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.082 seconds

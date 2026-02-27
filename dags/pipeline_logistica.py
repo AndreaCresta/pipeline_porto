@@ -1,33 +1,30 @@
 from airflow import DAG
-from airflow.providers.postgres.operators.postgres import PostgresOperator
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from datetime import datetime, timedelta
 
-# Definiamo i parametri di base del nostro DAG
 default_args = {
     'owner': 'andrea',
     'depends_on_past': False,
-    'start_date': datetime(2023, 1, 1), # Data fittizia di inizio
+    'start_date': datetime(2023, 1, 1),
     'email_on_failure': False,
     'email_on_retry': False,
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
 
-# Creiamo il DAG: girerà ogni ora ('@hourly')
 with DAG(
-    'pipeline_mar_ligure_v1',
+    'pipeline_mar_ligure_v2', # L'ho chiamato v2 così lo riconosciamo subito!
     default_args=default_args,
     description='Pipeline ETL per i terminal di Genova e Vado',
-    schedule_interval='@hourly',
+    schedule='@hourly', # <-- Risolto il primo warning
     catchup=False,
     tags=['logistica', 'tesi'],
 ) as dag:
 
     # TASK 1: Svuotare e ricaricare la Fact Table
-    # (Usiamo truncate per non duplicare i dati con le nuove run)
-    aggiorna_fact_movimenti = PostgresOperator(
+    aggiorna_fact_movimenti = SQLExecuteQueryOperator( # <-- Risolto il secondo warning
         task_id='aggiorna_fact_movimenti',
-        postgres_conn_id='connessione_db_tesi', # Lo configureremo nell'interfaccia web
+        conn_id='connessione_db_tesi', 
         sql="""
         TRUNCATE TABLE fact_movimenti;
         
@@ -61,6 +58,4 @@ with DAG(
         """
     )
 
-    # Qui in futuro potremmo aggiungere altri task (es. pulizia vecchi dati)
-    # Per ora eseguiamo solo l'aggiornamento
     aggiorna_fact_movimenti

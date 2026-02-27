@@ -11,3 +11,21 @@
 [2026-02-27T17:21:14.625+0000] {manager.py:741} INFO - There are 0 files in /opt/airflow/dags
 [2026-02-27T17:26:15.069+0000] {manager.py:738} INFO - Searching for files in /opt/airflow/dags
 [2026-02-27T17:26:15.072+0000] {manager.py:741} INFO - There are 0 files in /opt/airflow/dags
+[2026-02-27T17:31:15.628+0000] {manager.py:738} INFO - Searching for files in /opt/airflow/dags
+[2026-02-27T17:31:15.635+0000] {manager.py:741} INFO - There are 1 files in /opt/airflow/dags
+[2026-02-27T17:31:25.733+0000] {manager.py:879} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+---------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/pipeline_logistica.py                           1           0  0.14s           2026-02-27T17:31:15
+================================================================================
+[2026-02-27T17:31:56.009+0000] {manager.py:879} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+---------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/pipeline_logistica.py                           1           0  0.09s           2026-02-27T17:31:54
+================================================================================
