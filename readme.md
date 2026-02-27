@@ -709,7 +709,7 @@ pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_di
 
 Questa configurazione garantisce che il caricamento della Fact Table avvenga *esclusivamente* se la fase di Data Cleansing e il censimento parallelo delle dimensioni si sono conclusi con successo, preservando l'assoluta coerenza strutturale del Data Warehouse.
 
-<img width="852" alt="airflow_dag_graph" src="https://github.com/user-attachments/assets/INSERISCI_QUI_IL_LINK_DELLA_TUA_IMMAGINE">
+<img width="985" height="244" alt="airflow_automazioen" src="https://github.com/user-attachments/assets/9e6dde75-9f7b-4105-b3c3-7a081c0dbcf2" />
 
 ---
 
