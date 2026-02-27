@@ -189,23 +189,6 @@ ON CONFLICT (mmsi) DO NOTHING;
 ```  
 
   * **`dim_terminal`**: Contiene la definizione geografica (poligoni di Geofencing) dei terminal monitorati, quali Genova Voltri (PSA Pra'), Genova Sampierdarena e Vado Gateway. Rende le interrogazioni geografiche indipendenti dal codice applicativo Python.
-  * **`dim_tempo`**: Gerarchia temporale (Ora, Giorno, Mese) pianificata per le analisi aggregate, essenziale per identificare pattern ciclici di congestione.
-
-```sql
-
-CREATE TABLE dim_navi (
-    mmsi VARCHAR(20) PRIMARY KEY,
-    ship_name TEXT,
-    data_inserimento TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-
-INSERT INTO dim_navi (mmsi, ship_name)
-SELECT DISTINCT mmsi, ship_name
-FROM staging_ais_data
-WHERE mmsi IS NOT NULL
-ON CONFLICT (mmsi) DO NOTHING;
-```
 
 ```sql
 
@@ -222,7 +205,9 @@ INSERT INTO dim_terminal (codice_zona, nome_esteso, citta) VALUES
 ('VADO_GATEWAY', 'Vado Gateway Terminal', 'Savona'),
 ('ALTRO_LIGURIA', 'Mar Ligure (In Transito)', 'N/A')
 ON CONFLICT (codice_zona) DO NOTHING;
-```
+```  
+
+  * **`dim_tempo`**: Gerarchia temporale (Ora, Giorno, Mese) pianificata per le analisi aggregate, essenziale per identificare pattern ciclici di congestione.
 
 ```sql
 
@@ -246,7 +231,8 @@ SELECT
     EXTRACT(ISODOW FROM datum) IN (6, 7) AS is_weekend
 FROM generate_series('2024-01-01'::DATE, '2026-12-31'::DATE, '1 day'::interval) AS datum
 ON CONFLICT (data_id) DO NOTHING;
-```
+```  
+
 
 * **Tabella dei Fatti (Eventi):**
   * **`fact_movimenti`**: È il cuore del sistema analitico. Registra esclusivamente gli eventi di "Ingresso" e "Uscita" dalle aree terminal, relazionando l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
