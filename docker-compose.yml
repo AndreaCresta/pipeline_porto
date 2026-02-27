@@ -1,8 +1,21 @@
-version: '3.8'
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.8.1
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin_tesi:password_sicura@db_tesi:5432/logistica_liguria
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  depends_on:
+    - db_tesi
+  networks:
+    - tesi_network
 
 services:
   db_tesi:
-    image: postgres:18
+    image: postgres:15
     container_name: postgres_porto
     environment:
       POSTGRES_USER: admin_tesi
@@ -11,7 +24,9 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - dati_porto:/var/lib/postgresql
+      - dati_porto:/var/lib/postgresql/data
+    networks:
+      - tesi_network
 
   pgadmin:
     image: dpage/pgadmin4
@@ -23,6 +38,47 @@ services:
       - "8080:80"
     depends_on:
       - db_tesi
+    networks:
+      - tesi_network
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    command: version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: webserver
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      - db_tesi
+      - airflow-init
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: scheduler
+    depends_on:
+      - db_tesi
+      - airflow-init
 
 volumes:
   dati_porto:
+
+
+networks:
+  tesi_network:
+    driver: bridge
