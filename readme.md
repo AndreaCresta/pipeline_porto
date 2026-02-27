@@ -1,8 +1,8 @@
-# ⚓ Monitoraggio Logistico Portuale: Mar Ligure Data Pipeline
+# Sviluppo di una pipeline ETL automatizzata per il monitoraggio dei dati AIS nel traffico marittimo del Porto di Genova
 
 Questo repository contiene l'infrastruttura, il codice sorgente e la documentazione del mio progetto di tesi in Data Engineering. Il sistema è progettato per intercettare, trasformare e storicizzare in tempo reale i dati del traffico marittimo (AIS) nei principali terminal della Liguria, con l'obiettivo di calcolare KPI logistici avanzati (tempi di attesa, congestione, overstay).
 
-## 🛠️ Stack Tecnologico
+## Stack Tecnologico
 * **Infrastruttura:** Docker, Docker Compose
 * **Database:** PostgreSQL 18
 * **ETL & Scripting:** Python 3.12 (psycopg2, websockets, asyncio)
@@ -11,7 +11,7 @@ Questo repository contiene l'infrastruttura, il codice sorgente e la documentazi
 
 ---
 
-## 📂 Struttura del Progetto
+## Struttura del Progetto
 ```text
 /
 ├── docker-compose.yml       # Definizione dell'infrastruttura containerizzata
@@ -20,7 +20,7 @@ Questo repository contiene l'infrastruttura, il codice sorgente e la documentazi
 └── README.md                # Documentazione di progetto
 ```
 
-## ⚙️ Guida all'Installazione e Avvio Rapido
+## Guida all'Installazione e Avvio Rapido
 
 Per replicare l'ambiente di sviluppo in locale, seguire questi passaggi:
 
@@ -49,7 +49,7 @@ Per replicare l'ambiente di sviluppo in locale, seguire questi passaggi:
 
 ---
 
-## 🚀 Fase 1: Data Ingestion e Setup Infrastrutturale (Completata)
+## Fase 1: Data Ingestion e Setup Infrastrutturale
 
 In questa prima fase ho progettato e implementato l'intera pipeline di acquisizione dati (Ingestion), partendo dall'infrastruttura fino alla scrittura in database.
 
@@ -167,7 +167,7 @@ asyncio.run(get_port_data())
 
 ---
 
-## 🧠 Fase 2: Processing & Data Modeling (Settimane 3-5)
+## Fase 2: Processing & Data Modeling
 
 L'obiettivo di questa fase è la trasformazione del dato "grezzo" (Raw Data) in "informazione strutturata" (Analytics-Ready Data) per rispondere ai requisiti logistici della tesi. In questa fase, il sistema evolve da una singola tabella di atterraggio a uno **Star Schema** ottimizzato per il calcolo dei KPI.
 
@@ -460,7 +460,7 @@ WHERE a.ctid < b.ctid
 
 ---
 
-## 🔜 Fasi Successive del Progetto
+## Fasi Successive del Progetto
 
 * [ ] **Fase 3: Orchestrazione e Automazione (Apache Airflow)**
   * *Pianificato:* Schedulazione dei processi ETL batch.
