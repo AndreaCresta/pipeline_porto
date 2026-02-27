@@ -237,15 +237,54 @@ ON CONFLICT (data_id) DO NOTHING;
 * **Tabella dei Fatti (Eventi):**
   * **`fact_movimenti`**: È il cuore del sistema analitico. Registra esclusivamente gli eventi di "Ingresso" e "Uscita" dalle aree terminal, relazionando l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
 
-#### 2.2 Il Flusso di Lavoro (Pipeline ETL in 4 Step)
-Il popolamento del Data Warehouse avviene tramite quattro passaggi sequenziali:
+```sql
 
-* **Step 1: Costruzione delle Dimensioni:** Estrazione delle informazioni statiche (es. MMSI univoci) dalla tabella di staging temporanea per popolare le tabelle satellite (`dim_navi`, `dim_terminal`).
-* **Step 2: Rilevamento degli Eventi Logistici:** I dati AIS forniscono posizioni assolute, ma per la logistica servono eventi di stato. Vengono implementate query SQL avanzate con funzioni analitiche (es. `LAG()`) per confrontare cronologicamente i record. Un cambio di stato nella colonna `terminal_zona` tra il record al tempo T e quello al tempo T-1 funge da trigger matematico di arrivo o partenza.
-* **Step 3: Popolamento della Tabella dei Fatti:** Consolidamento degli eventi isolati nello Step 2 all'interno di `fact_movimenti`. Questa struttura riduce drasticamente il volume dei dati da interrogare rispetto allo staging grezzo, migliorando le performance per i tool di BI.
-* **Step 4: Astrazione e Materializzazione:** Creazione di Viste SQL (tabelle virtuali) per astrarre la complessità dei calcoli e fornire metriche pronte all'uso per l'analisi.
+CREATE TABLE fact_movimenti (
+    id_movimento SERIAL PRIMARY KEY,
+    mmsi VARCHAR(20) REFERENCES dim_navi(mmsi),
+    codice_zona VARCHAR(50) REFERENCES dim_terminal(codice_zona),
+    orario_arrivo TIMESTAMP,
+    orario_partenza TIMESTAMP,
+    data_elaborazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
----
+```sql
+
+-- Estrazione degli eventi logistici e inserimento nella Fact Table
+INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo, orario_partenza)
+WITH cambi_stato AS (
+    -- Step A: Affianchiamo a ogni record la zona in cui si trovava la nave nel record precedente
+    SELECT 
+        mmsi,
+        terminal_zona,
+        timestamp_utc,
+        LAG(terminal_zona) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) as zona_precedente
+    FROM staging_ais_data
+    WHERE mmsi IS NOT NULL
+),
+arrivi_partenze AS (
+    -- Step B: Teniamo solo i momenti in cui la zona CAMBIA (è un Arrivo).
+    -- Usiamo LEAD per cercare il timestamp del prossimo cambio di zona (che sarà la Partenza).
+    SELECT 
+        mmsi,
+        terminal_zona,
+        timestamp_utc AS orario_arrivo,
+        LEAD(timestamp_utc) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) AS orario_partenza
+    FROM cambi_stato
+    WHERE terminal_zona IS DISTINCT FROM zona_precedente
+)
+-- Step C: Filtriamo e salviamo solo gli scali reali nei porti (ignorando il transito in mare aperto)
+SELECT 
+    mmsi,
+    terminal_zona AS codice_zona,
+    orario_arrivo,
+    orario_partenza
+FROM arrivi_partenze
+WHERE terminal_zona != 'ALTRO_LIGURIA' 
+  AND orario_partenza IS NOT NULL;
+
+```
 
 ### 3. Logica di Business e KPI Logistici
 
