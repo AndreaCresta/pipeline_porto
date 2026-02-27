@@ -152,13 +152,13 @@ Per garantire la scalabilità della pipeline e gestire migliaia di record AIS in
 * **`idx_ais_mmsi_time`**: Indice composito (`mmsi`, `timestamp_utc DESC`) progettato specificamente per le query di ricostruzione della rotta, riducendo drasticamente i tempi di esecuzione per la ricerca dell'ultima posizione nota.
 
 ```sql
--- Indice per velocizzare le ricerche cronologiche
+
 CREATE INDEX idx_ais_timestamp ON staging_ais_data (timestamp_utc);
 
--- Indice per velocizzare le ricerche per singola nave (MMSI)
+
 CREATE INDEX idx_ais_mmsi ON staging_ais_data (mmsi);
 
--- Indice "potenziato" per analisi avanzate (MMSI + Tempo decrescente)
+
 CREATE INDEX idx_ais_mmsi_time ON staging_ais_data (mmsi, timestamp_utc DESC);
 ```
 
@@ -175,14 +175,14 @@ L'architettura separa rigorosamente i fatti (eventi dinamici) dalle dimensioni (
   * **`dim_tempo`**: Gerarchia temporale (Ora, Giorno, Mese) pianificata per le analisi aggregate, essenziale per identificare pattern ciclici di congestione.
 
 ```sql
--- 1. Creiamo la struttura della tabella Dimensione Navi
+
 CREATE TABLE dim_navi (
     mmsi VARCHAR(20) PRIMARY KEY,
     ship_name TEXT,
     data_inserimento TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Popoliamo la tabella estraendo le navi UNICHE dallo staging
+
 INSERT INTO dim_navi (mmsi, ship_name)
 SELECT DISTINCT mmsi, ship_name
 FROM staging_ais_data
