@@ -13,20 +13,71 @@ default_args = {
 }
 
 with DAG(
-    'pipeline_mar_ligure_v2', # L'ho chiamato v2 così lo riconosciamo subito!
+    'pipeline_mar_ligure_completa', 
     default_args=default_args,
-    description='Pipeline ETL per i terminal di Genova e Vado',
-    schedule='@hourly', # <-- Risolto il primo warning
+    description='Pipeline ETL completa: Cleansing, Dimensioni e Fatti',
+    schedule='@hourly', 
     catchup=False,
-    tags=['logistica', 'tesi'],
+    tags=['logistica', 'tesi', 'produzione'],
 ) as dag:
 
-    # TASK 1: Svuotare e ricaricare la Fact Table
-    aggiorna_fact_movimenti = SQLExecuteQueryOperator( # <-- Risolto il secondo warning
+    # TASK 1: Pulizia coordinate mancanti (dal Readme)
+    pulisci_coordinate_nulle = SQLExecuteQueryOperator(
+        task_id='pulisci_coordinate_nulle',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        DELETE FROM staging_ais_data
+        WHERE lat IS NULL OR lon IS NULL;
+        """
+    )
+
+    # TASK 2: Deduplicazione tecnica (dal Readme)
+    deduplica_staging = SQLExecuteQueryOperator(
+        task_id='deduplica_staging',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        DELETE FROM staging_ais_data a
+        USING staging_ais_data b
+        WHERE a.ctid < b.ctid 
+          AND a.mmsi = b.mmsi 
+          AND a.timestamp_utc = b.timestamp_utc;
+        """
+    )
+
+    # TASK 3A: Aggiorna l'anagrafica delle navi
+    aggiorna_dim_navi = SQLExecuteQueryOperator(
+        task_id='aggiorna_dim_navi',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        INSERT INTO dim_navi (mmsi, ship_name)
+        SELECT mmsi, MAX(ship_name) AS ship_name
+        FROM staging_ais_data
+        WHERE mmsi IS NOT NULL
+        GROUP BY mmsi
+        ON CONFLICT (mmsi) DO NOTHING;
+        """
+    )
+
+    # TASK 3B: Aggiorna le zone portuali
+    aggiorna_dim_terminal = SQLExecuteQueryOperator(
+        task_id='aggiorna_dim_terminal',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        INSERT INTO dim_terminal (codice_zona, nome_esteso, citta)
+        SELECT DISTINCT terminal_zona, terminal_zona, 'Da definire'
+        FROM staging_ais_data
+        WHERE terminal_zona != 'ALTRO_LIGURIA' 
+          AND terminal_zona IS NOT NULL
+        ON CONFLICT (codice_zona) DO NOTHING;
+        """
+    )
+
+    # TASK 4: Calcola gli arrivi e le partenze
+    aggiorna_fact_movimenti = SQLExecuteQueryOperator(
         task_id='aggiorna_fact_movimenti',
         conn_id='connessione_db_tesi', 
         sql="""
-        TRUNCATE TABLE fact_movimenti;
+        TRUNCATE TABLE fact_movimenti CASCADE;
         
         INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo, orario_partenza)
         WITH cambi_stato AS (
@@ -58,4 +109,5 @@ with DAG(
         """
     )
 
-    aggiorna_fact_movimenti
+    # Esecuzione logica: Pulizia -> Aggiornamento Dimensioni -> Calcolo Fatti
+    pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti

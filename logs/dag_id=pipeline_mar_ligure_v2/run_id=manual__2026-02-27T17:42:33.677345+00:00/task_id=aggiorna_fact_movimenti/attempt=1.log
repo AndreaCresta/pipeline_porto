@@ -1,0 +1,77 @@
+[2026-02-27T17:42:34.031+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: pipeline_mar_ligure_v2.aggiorna_fact_movimenti manual__2026-02-27T17:42:33.677345+00:00 [queued]>
+[2026-02-27T17:42:34.036+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: pipeline_mar_ligure_v2.aggiorna_fact_movimenti manual__2026-02-27T17:42:33.677345+00:00 [queued]>
+[2026-02-27T17:42:34.036+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 2
+[2026-02-27T17:42:34.043+0000] {taskinstance.py:2191} INFO - Executing <Task(SQLExecuteQueryOperator): aggiorna_fact_movimenti> on 2026-02-27 17:42:33.677345+00:00
+[2026-02-27T17:42:34.045+0000] {standard_task_runner.py:60} INFO - Started process 315 to run task
+[2026-02-27T17:42:34.049+0000] {standard_task_runner.py:87} INFO - Running: ['airflow', 'tasks', 'run', 'pipeline_mar_ligure_v2', 'aggiorna_fact_movimenti', 'manual__2026-02-27T17:42:33.677345+00:00', '--job-id', '9', '--raw', '--subdir', 'DAGS_FOLDER/pipeline_logistica.py', '--cfg-path', '/tmp/tmpyxq0i9i9']
+[2026-02-27T17:42:34.050+0000] {standard_task_runner.py:88} INFO - Job 9: Subtask aggiorna_fact_movimenti
+[2026-02-27T17:42:34.081+0000] {task_command.py:423} INFO - Running <TaskInstance: pipeline_mar_ligure_v2.aggiorna_fact_movimenti manual__2026-02-27T17:42:33.677345+00:00 [running]> on host 5b9b6da3d829
+[2026-02-27T17:42:34.119+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='andrea' AIRFLOW_CTX_DAG_ID='pipeline_mar_ligure_v2' AIRFLOW_CTX_TASK_ID='aggiorna_fact_movimenti' AIRFLOW_CTX_EXECUTION_DATE='2026-02-27T17:42:33.677345+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-02-27T17:42:33.677345+00:00'
+[2026-02-27T17:42:34.119+0000] {sql.py:276} INFO - Executing: 
+        TRUNCATE TABLE fact_movimenti;
+        
+        INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo, orario_partenza)
+        WITH cambi_stato AS (
+            SELECT 
+                mmsi,
+                terminal_zona,
+                timestamp_utc,
+                LAG(terminal_zona) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) as zona_precedente
+            FROM staging_ais_data
+            WHERE mmsi IS NOT NULL
+        ),
+        arrivi_partenze AS (
+            SELECT 
+                mmsi,
+                terminal_zona,
+                timestamp_utc AS orario_arrivo,
+                LEAD(timestamp_utc) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) AS orario_partenza
+            FROM cambi_stato
+            WHERE terminal_zona IS DISTINCT FROM zona_precedente
+        )
+        SELECT 
+            mmsi,
+            terminal_zona AS codice_zona,
+            orario_arrivo,
+            orario_partenza
+        FROM arrivi_partenze
+        WHERE terminal_zona != 'ALTRO_LIGURIA' 
+          AND orario_partenza IS NOT NULL;
+        
+[2026-02-27T17:42:34.124+0000] {base.py:83} INFO - Using connection ID 'connessione_db_tesi' for task execution.
+[2026-02-27T17:42:34.129+0000] {base.py:83} INFO - Using connection ID 'connessione_db_tesi' for task execution.
+[2026-02-27T17:42:34.132+0000] {sql.py:450} INFO - Running statement: 
+        TRUNCATE TABLE fact_movimenti;
+        
+        INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo, orario_partenza)
+        WITH cambi_stato AS (
+            SELECT 
+                mmsi,
+                terminal_zona,
+                timestamp_utc,
+                LAG(terminal_zona) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) as zona_precedente
+            FROM staging_ais_data
+            WHERE mmsi IS NOT NULL
+        ),
+        arrivi_partenze AS (
+            SELECT 
+                mmsi,
+                terminal_zona,
+                timestamp_utc AS orario_arrivo,
+                LEAD(timestamp_utc) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) AS orario_partenza
+            FROM cambi_stato
+            WHERE terminal_zona IS DISTINCT FROM zona_precedente
+        )
+        SELECT 
+            mmsi,
+            terminal_zona AS codice_zona,
+            orario_arrivo,
+            orario_partenza
+        FROM arrivi_partenze
+        WHERE terminal_zona != 'ALTRO_LIGURIA' 
+          AND orario_partenza IS NOT NULL;
+        , parameters: None
+[2026-02-27T17:42:34.136+0000] {sql.py:459} INFO - Rows affected: 3
+[2026-02-27T17:42:34.142+0000] {taskinstance.py:1138} INFO - Marking task as SUCCESS. dag_id=pipeline_mar_ligure_v2, task_id=aggiorna_fact_movimenti, execution_date=20260227T174233, start_date=20260227T174234, end_date=20260227T174234
+[2026-02-27T17:42:34.192+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 0
+[2026-02-27T17:42:34.200+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check
