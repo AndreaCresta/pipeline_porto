@@ -375,12 +375,61 @@ LEFT JOIN dim_terminal t ON m.codice_zona = t.codice_zona;
 #### 3.2. Identificazione Anomalie e Overstay
 Tramite viste SQL materializzate, il sistema filtra automaticamente i dati per far emergere i casi critici (Outliers):
 * **Overstay al Molo:** Identificazione delle navi che superano le soglie standard di permanenza (es. > 72 ore al Vado Gateway), segnalando possibili guasti, ispezioni doganali o inefficienze nelle operazioni di piazzale.
+
+```sql
+
+-- Vista dedicata esclusivamente all'analisi delle anomalie (Overstay > 72h)
+CREATE OR REPLACE VIEW vw_analisi_overstay AS
+SELECT 
+    ship_name,
+    terminal,
+    orario_arrivo,
+    orario_partenza,
+    permanenza_totale,
+    ore_in_porto
+FROM vw_kpi_tempi_porto
+WHERE flag_overstay = TRUE
+ORDER BY ore_in_porto DESC;
+
+```
+
 * **Colli di Bottiglia Infrastrutturali:** Mappatura delle zone (es. Voltri vs. Sampierdarena) con i più alti tempi di attesa medi, fornendo dati cruciali per l'ottimizzazione dei flussi.
+
+```sql
+
+-- Vista per il confronto delle performance tra i terminal (Bottlenecks)
+CREATE OR REPLACE VIEW vw_kpi_confronto_terminal AS
+SELECT 
+    terminal,
+    COUNT(id_movimento) as numero_scali,
+    ROUND(AVG(ore_in_porto), 2) as media_ore_permanenza,
+    SUM(CASE WHEN flag_overstay THEN 1 ELSE 0 END) as totale_overstay
+FROM vw_kpi_tempi_porto
+GROUP BY terminal;
+
+```
 
 #### 3.3. Data Cleansing e Integrità
 Per garantire l'affidabilità dei KPI, sono state automatizzate procedure di pulizia del dato a livello di database:
 * Rimozione dei "rimbalzi GPS" (Ghost Ping) e delle coordinate outlier generate da errori di trasmissione dell'antenna AIS.
 * Deduplicazione tecnica degli eventi per assicurare che ogni scalo nave generi un singolo record fattuale nella tabella `fact_movimenti`.
+
+```sql
+
+-- 1. Rimozione record incompleti (coordinate mancanti)
+DELETE FROM staging_ais_data
+WHERE lat IS NULL 
+   OR lon IS NULL;
+
+-- 2. Deduplicazione tecnica
+-- Rimuove i messaggi identici inviati dalla stessa nave nello stesso istante
+DELETE FROM staging_ais_data a
+USING staging_ais_data b
+WHERE a.ctid < b.ctid 
+  AND a.mmsi = b.mmsi 
+  AND a.timestamp_utc = b.timestamp_utc;
+
+```
 
 ## ⚙️ Guida all'Installazione e Avvio Rapido
 
@@ -413,8 +462,6 @@ Per replicare l'ambiente di sviluppo in locale, seguire questi passaggi:
 
 ## 🔜 Fasi Successive del Progetto
 
-* [ ] **Fase 2: Processing & Business Logic (SQL)**
-  * *Pianificato:* Sviluppo di viste e procedure SQL per il calcolo del Time in Port e del Time in Rada.
 * [ ] **Fase 3: Orchestrazione (Apache Airflow)**
   * *Pianificato:* Schedulazione dei processi ETL batch.
 * [ ] **Fase 4: Data Visualization (Power BI)**
