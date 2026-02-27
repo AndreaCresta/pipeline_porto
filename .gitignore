@@ -1,0 +1,9 @@
+# Ignora i log di Airflow
+logs/
+
+# Ignora le cache di Python
+__pycache__/
+*.pyc
+
+# Ignora eventuali file di ambiente con password
+.env

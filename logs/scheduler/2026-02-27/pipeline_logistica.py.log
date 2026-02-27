@@ -336,3 +336,87 @@
 [2026-02-27T17:52:51.420+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:52:51.420+0000] {dag.py:3058} INFO - Creating ORM DAG for pipeline_mar_ligure_completa
 [2026-02-27T17:52:51.425+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:52:51.425+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 16:00:00+00:00, run_after=2026-02-27 17:00:00+00:00
 [2026-02-27T17:52:51.431+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.087 seconds
+[2026-02-27T17:53:21.672+0000] {processor.py:161} INFO - Started process (PID=455) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:53:21.672+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:53:21.673+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:53:21.673+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:53:21.683+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:53:21.698+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:53:21.698+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:53:21.709+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:53:21.709+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:53:21.718+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.050 seconds
+[2026-02-27T17:53:51.926+0000] {processor.py:161} INFO - Started process (PID=460) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:53:51.926+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:53:51.927+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:53:51.927+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:53:51.936+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:53:51.953+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:53:51.953+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:53:51.964+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:53:51.964+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:53:51.974+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.050 seconds
+[2026-02-27T17:54:22.208+0000] {processor.py:161} INFO - Started process (PID=465) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:54:22.208+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:54:22.209+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:54:22.209+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:54:22.219+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:54:22.238+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:54:22.238+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:54:22.249+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:54:22.249+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:54:22.257+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.053 seconds
+[2026-02-27T17:54:52.446+0000] {processor.py:161} INFO - Started process (PID=470) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:54:52.447+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:54:52.448+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:54:52.448+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:54:52.457+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:54:52.473+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:54:52.473+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:54:52.486+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:54:52.486+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:54:52.494+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.052 seconds
+[2026-02-27T17:55:22.745+0000] {processor.py:161} INFO - Started process (PID=475) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:55:22.745+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:55:22.746+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:55:22.746+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:55:22.756+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:55:22.774+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:55:22.774+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:55:22.786+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:55:22.786+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:55:22.796+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.054 seconds
+[2026-02-27T17:55:53.001+0000] {processor.py:161} INFO - Started process (PID=480) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:55:53.002+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:55:53.003+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:55:53.003+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:55:53.015+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:55:53.035+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:55:53.035+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:55:53.048+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:55:53.048+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:55:53.056+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.058 seconds
+[2026-02-27T17:56:23.275+0000] {processor.py:161} INFO - Started process (PID=485) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:56:23.276+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:56:23.277+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:56:23.277+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:56:23.286+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:56:23.303+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:56:23.303+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:56:23.314+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:56:23.314+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:56:23.322+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.050 seconds
+[2026-02-27T17:56:53.539+0000] {processor.py:161} INFO - Started process (PID=490) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:56:53.539+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:56:53.540+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:56:53.540+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:56:53.548+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:56:53.564+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:56:53.564+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:56:53.574+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:56:53.574+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:56:53.583+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.046 seconds
+[2026-02-27T17:57:23.798+0000] {processor.py:161} INFO - Started process (PID=495) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:57:23.799+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:57:23.799+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:57:23.799+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:57:23.808+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:57:23.822+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:57:23.822+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:57:23.832+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:57:23.832+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:57:23.840+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.044 seconds
+[2026-02-27T17:57:54.044+0000] {processor.py:161} INFO - Started process (PID=500) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:57:54.045+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:57:54.045+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:57:54.045+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:57:54.053+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:57:54.067+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:57:54.067+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:57:54.077+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:57:54.077+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:57:54.084+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.042 seconds
+[2026-02-27T17:58:24.274+0000] {processor.py:161} INFO - Started process (PID=505) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:58:24.274+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:58:24.275+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:58:24.275+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:58:24.281+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:58:24.296+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:58:24.295+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:58:24.305+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:58:24.305+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:58:24.313+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.041 seconds
+[2026-02-27T17:58:54.499+0000] {processor.py:161} INFO - Started process (PID=510) to work on /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:58:54.499+0000] {processor.py:830} INFO - Processing file /opt/airflow/dags/pipeline_logistica.py for tasks to queue
+[2026-02-27T17:58:54.500+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:58:54.499+0000] {dagbag.py:538} INFO - Filling up the DagBag from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:58:54.506+0000] {processor.py:840} INFO - DAG(s) 'pipeline_mar_ligure_completa' retrieved from /opt/airflow/dags/pipeline_logistica.py
+[2026-02-27T17:58:54.520+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:58:54.520+0000] {dag.py:3036} INFO - Sync 1 DAGs
+[2026-02-27T17:58:54.532+0000] {logging_mixin.py:188} INFO - [2026-02-27T17:58:54.532+0000] {dag.py:3823} INFO - Setting next_dagrun for pipeline_mar_ligure_completa to 2026-02-27 17:00:00+00:00, run_after=2026-02-27 18:00:00+00:00
+[2026-02-27T17:58:54.539+0000] {processor.py:183} INFO - Processing /opt/airflow/dags/pipeline_logistica.py took 0.042 seconds
