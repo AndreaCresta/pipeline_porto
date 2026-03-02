@@ -1,6 +1,6 @@
 # Sviluppo di una pipeline ETL automatizzata per il monitoraggio dei dati AIS nel traffico marittimo del Porto di Genova
 
-Questo repository contiene l'infrastruttura, il codice sorgente e la documentazione del mio progetto di tesi nel campo del Data Engineering. Il sistema è progettato per intercettare, trasformare e storicizzare in tempo reale i dati del traffico marittimo (AIS) nei principali terminal della Liguria, con l'obiettivo di calcolare KPI logistici avanzati (tempi di attesa, congestione, overstay).
+Questo repository contiene l'infrastruttura, il codice sorgente e la documentazione del mio progetto di Data Engineering. Il sistema è progettato per intercettare, trasformare e storicizzare in tempo reale i dati del traffico marittimo (AIS) nei principali terminal della Liguria, con l'obiettivo di calcolare KPI logistici avanzati (tempi di attesa, congestione, overstay).
 
 ## Stack Tecnologico
 * **Infrastruttura:** Docker, Docker Compose
@@ -719,7 +719,4 @@ Questa configurazione garantisce che il caricamento della Fact Table avvenga *es
 * [x] **Fase 2: Processing & Data Modeling**
 * [x] **Fase 3: Orchestrazione e Automazione (Apache Airflow)**
 * [ ] **Fase 4: Data Visualization & Business Intelligence (Power BI)**
-  * *Pianificato:* Connessione in Import/DirectQuery tra Power BI e le viste materializzate in PostgreSQL per lo sviluppo di una dashboard direzionale, focalizzata sul monitoraggio visivo dei KPI logistici (tempi di ciclo) e degli allarmi di Overstay nei terminal del Mar Ligure.
-
-* [ ] **Fase 4: Data Visualization (Power BI)**
-  * *Pianificato:* Sviluppo dashboard interattiva aziendale con metriche di Congestione e allarmi di Overstay.
+  * *Pianificato:* Connessione in Import/DirectQuery tra Power BI e le viste materializzate in PostgreSQL per lo sviluppo di una dashboard direzionale, focalizzata sul monitoraggio visivo dei KPI logistici (tempi di ciclo) e degli allarmi di Overstay nei principali terminal di Genova e Vado.
