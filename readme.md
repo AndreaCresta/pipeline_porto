@@ -87,7 +87,7 @@ services:
 volumes:
   dati_porto:
 ```
-*Nota tecnica:* Ho adottato PostgreSQL 18 per sfruttare le recenti performance di I/O asincrono. Questo ha richiesto la mappatura del volume direttamente su `/var/lib/postgresql/data` per mantenere la compatibilità con il nuovo sistema di gestione dei metadati della v18.
+*Nota tecnica:* Ho adottato PostgreSQL 18 per sfruttare le recenti performance di I/O asincrono. Il volume è mappato su `/var/lib/postgresql/data`, path standard per la persistenza dei dati in PostgreSQL.
 
 ### 2. Data Definition Language (DDL)
 Per garantire prestazioni elevate e scalabilità su miliardi di righe, ho adottato un'architettura basata sul **Table Partitioning** nativo di PostgreSQL. Questo approccio permette al database di eseguire il Partition Pruning, leggendo esclusivamente i "cassetti" temporali rilevanti e ignorando il resto dello storico, riducendo i tempi di query da minuti a frazioni di secondo.
@@ -129,10 +129,6 @@ CREATE TABLE IF NOT EXISTS staging_ais_data_YYYY_MM PARTITION OF staging_ais_dat
 FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-MM-01' + INTERVAL '1 month');
 
 ```
-
-* **Metodo:** `PARTITION BY RANGE (timestamp_utc)`
-* **Logica:** I dati vengono smistati automaticamente in partizioni mensili fisicamente separate (es. `staging_ais_data_2026_03`, `staging_ais_data_2026_04`).
-* **Vantaggi per l'Analisi:** Quando la pipeline o Power BI eseguono query analitiche o calcolano KPI (es. Dwell Time) su un periodo specifico, il motore del database esegue la *Partition Pruning*, leggendo esclusivamente i "cassetti" mensili rilevanti e ignorando il resto dello storico, riducendo i tempi di query da minuti a frazioni di secondo.
 
 ## Architettura di Data Ingestion: Pattern Producer-Consumer
 Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **asincrona con coda in memoria (Buffering)** basata su `asyncio`.
@@ -607,7 +603,7 @@ x-airflow-common: &airflow-common
 
 services:
   db_tesi:
-    image: postgres:15
+    image: postgres:18
     container_name: postgres_porto
     environment:
       POSTGRES_USER: admin_tesi
@@ -677,7 +673,7 @@ networks:
 ```
 
 ### 3.2 Progettazione del DAG (Directed Acyclic Graph)
-La logica di aggiornamento è stata codificata in Python all'interno del file `pipeline_logistica.py`. Il DAG, denominato `pipeline_mar_ligure_completa`, esegue 5 task distinti ed è stato progettato per rispondere a tre requisiti fondamentali del Data Engineering: **Integrità del dato, Idempotenza ed Esecuzione Parallela**.
+La logica di aggiornamento è stata codificata in Python all'interno del file `pipeline_logistica.py`. Il DAG, denominato `pipeline_mar_ligure_completa`, esegue 7 task distinti ed è stato progettato per rispondere a tre requisiti fondamentali del Data Engineering: **Integrità del dato, Idempotenza ed Esecuzione Parallela**.
 
 ```python
 from airflow import DAG
