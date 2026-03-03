@@ -110,7 +110,7 @@ Per garantire prestazioni elevate nel lungo periodo e ottimizzare i tempi di let
 * **Vantaggi per l'Analisi:** Quando la pipeline o Power BI eseguono query analitiche o calcolano KPI (es. Dwell Time) su un periodo specifico, il motore del database esegue la *Partition Pruning*, leggendo esclusivamente i "cassetti" mensili rilevanti e ignorando il resto dello storico, riducendo i tempi di query da minuti a frazioni di secondo.
 
 ## Architettura di Data Ingestion: Pattern Producer-Consumer
-Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **Asincrona con coda in memoria (Buffering)** basata su `asyncio`.
+Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **asincrona con coda in memoria (Buffering)** basata su `asyncio`.
 
 Il flusso è diviso in due worker indipendenti:
 1. **Producer (Ricevitore API):** Ascolta il websocket in tempo reale. Appena riceve un JSON, lo decodifica, applica la logica di *Geofencing* per identificare il terminal e inserisce la tupla pulita in una `asyncio.Queue()`.
