@@ -65,22 +65,29 @@ with DAG(
         """
     )
 
-    # TASK 4: Arrivi (Sistemata con ON CONFLICT corretta)
+    # TASK 4: Calcola gli arrivi
     aggiorna_fact_movimenti = SQLExecuteQueryOperator(
         task_id='aggiorna_fact_movimenti',
         conn_id='connessione_db_tesi', 
         sql="""
         INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo)
-        SELECT DISTINCT ON (mmsi, terminal_zona, timestamp_utc)
-            mmsi, terminal_zona, timestamp_utc
-        FROM staging_ais_data
-        WHERE terminal_zona != 'ALTRO_LIGURIA'
-        ORDER BY mmsi, terminal_zona, timestamp_utc ASC
-        ON CONFLICT DO NOTHING;
+        SELECT mmsi, terminal_zona, orario_arrivo
+        FROM (
+            SELECT 
+                mmsi,
+                terminal_zona,
+                timestamp_utc AS orario_arrivo,
+                LAG(terminal_zona) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) as zona_precedente
+            FROM staging_ais_data
+            WHERE mmsi IS NOT NULL
+        ) sub
+        WHERE terminal_zona != 'ALTRO_LIGURIA' 
+          AND terminal_zona IS DISTINCT FROM zona_precedente
+        ON CONFLICT (mmsi, orario_arrivo) DO NOTHING;
         """
     )
 
-    # TASK 5: IL TASK MANCANTE - Registra le partenze
+    # TASK 5: Calcola le partenze (Evitando incroci col passato)
     aggiorna_partenze = SQLExecuteQueryOperator(
         task_id='aggiorna_partenze',
         conn_id='connessione_db_tesi', 
@@ -101,7 +108,8 @@ with DAG(
         ) sub
         WHERE f.mmsi = sub.mmsi 
           AND f.codice_zona = sub.terminal_zona 
-          AND f.orario_partenza IS NULL;
+          AND f.orario_partenza IS NULL
+          AND sub.ultima_visto > f.orario_arrivo; -- <-- LA MAGIA È QUI: La partenza deve essere successiva all'arrivo!
         """
     )
 
