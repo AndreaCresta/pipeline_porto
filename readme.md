@@ -87,7 +87,7 @@ services:
 volumes:
   dati_porto:
 ```
-*Nota tecnica:* Ho adottato PostgreSQL 18 per sfruttare le recenti performance di I/O asincrono. Questo ha richiesto la mappatura del volume direttamente su `/var/lib/postgresql` per mantenere la compatibilità con il nuovo sistema di gestione dei metadati della v18.
+*Nota tecnica:* Ho adottato PostgreSQL 18 per sfruttare le recenti performance di I/O asincrono. Questo ha richiesto la mappatura del volume direttamente su `/var/lib/postgresql/data` per mantenere la compatibilità con il nuovo sistema di gestione dei metadati della v18.
 
 ### 2. Data Definition Language (DDL)
 Per garantire prestazioni elevate e scalabilità su miliardi di righe, ho adottato un'architettura basata sul **Table Partitioning** nativo di PostgreSQL. Questo approccio permette al database di eseguire il Partition Pruning, leggendo esclusivamente i "cassetti" temporali rilevanti e ignorando il resto dello storico, riducendo i tempi di query da minuti a frazioni di secondo.
