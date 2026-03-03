@@ -11,8 +11,6 @@ Questo repository contiene l'infrastruttura, il codice sorgente e la documentazi
 * **Data Visualization & BI:** Microsoft Power BI
 
 ---
-<details>
-  <summary><b>📂 Clicca per visualizzare la struttura delle cartelle</b></summary>
 
 ## Struttura del Progetto
 ```text
@@ -22,7 +20,6 @@ Questo repository contiene l'infrastruttura, il codice sorgente e la documentazi
 ├── ingestion_pipeline.py    # Script Python principale per l'ETL in tempo reale
 └── README.md                # Documentazione di progetto
 ```
-</details>
 
 ## Guida all'Installazione e Avvio Rapido
 
