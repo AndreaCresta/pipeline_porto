@@ -71,7 +71,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - dati_porto:/var/lib/postgresql 
+      - dati_porto:/var/lib/postgresql/data
 
   pgadmin:
     image: dpage/pgadmin4
@@ -197,23 +197,32 @@ async def websocket_listener():
         "FilterMessageTypes": ["PositionReport"]
     }
 
-    async with websockets.connect(url) as websocket:
-        await websocket.send(json.dumps(subscribe_message))
-        print("📡 Lavoratore A: Connesso all'API! Inizio a riempire la coda...\n" + "-"*50)
+    # Aggiungiamo un loop infinito per l'auto-riconnessione
+    while True:
+        try:
+            print("📡 Lavoratore A: Tentativo di connessione all'API AISStream...")
+            async with websockets.connect(url) as websocket:
+                await websocket.send(json.dumps(subscribe_message))
+                print("✅ Lavoratore A: Connesso all'API! Inizio a riempire la coda...\n" + "-"*50)
 
-        async for message in websocket:
-            data = json.loads(message)
-            
-            mmsi = data['MetaData']['MMSI']
-            ship_name = data['MetaData']['ShipName']
-            lat = data['MetaData']['latitude']
-            lon = data['MetaData']['longitude']
-            time_utc = data['MetaData']['time_utc'].split('.')[0]
-            zona = identifica_terminal(lat, lon)
+                async for message in websocket:
+                    data = json.loads(message)
+                    
+                    mmsi = data['MetaData']['MMSI']
+                    ship_name = data['MetaData']['ShipName']
+                    lat = data['MetaData']['latitude']
+                    lon = data['MetaData']['longitude']
+                    time_utc = data['MetaData']['time_utc'].split('.')[0]
+                    zona = identifica_terminal(lat, lon)
 
-            # Crea una tupla col dato e lo sbatte SUBITO nella coda in memoria
-            record = (mmsi, ship_name, zona, lat, lon, time_utc)
-            await QUEUE.put(record)
+                    # Crea una tupla col dato e lo sbatte SUBITO nella coda in memoria
+                    record = (mmsi, ship_name, zona, lat, lon, time_utc)
+                    await QUEUE.put(record)
+                    
+        except Exception as e:
+            # Se la rete cade, va in timeout o il server li caccia, lo script non muore.
+            print(f"⚠️ Lavoratore A: Errore di connessione API ({e}). Riprovo tra 5 secondi...")
+            await asyncio.sleep(5) # Aspetta 5 secondi e poi il ciclo "while" riparte!
 
 # --- 3B. Lavoratore B (SCRITTORE: CODA -> DATABASE) ---
 async def db_writer():
@@ -679,8 +688,6 @@ default_args = {
     'owner': 'andrea',
     'depends_on_past': False,
     'start_date': datetime(2023, 1, 1),
-    'email_on_failure': False,
-    'email_on_retry': False,
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
@@ -688,10 +695,9 @@ default_args = {
 with DAG(
     'pipeline_mar_ligure_completa', 
     default_args=default_args,
-    description='Pipeline ETL completa: Cleansing, Dimensioni e Fatti',
     schedule='*/5 * * * *',
     catchup=False,
-    tags=['logistica', 'tesi', 'produzione'],
+    tags=['logistica', 'tesi'],
 ) as dag:
 ```
 
@@ -705,7 +711,7 @@ Come teorizzato nella progettazione logica del database, il primo step della pip
     pulisci_coordinate_nulle = SQLExecuteQueryOperator(
         task_id='pulisci_coordinate_nulle',
         conn_id='connessione_db_tesi', 
-        sql="DELETE FROM staging_ais_data WHERE lat IS NULL OR lon IS NULL;"
+        sql="DELETE FROM staging_ais_data WHERE lat IS NULL OR lon IS NULL OR mmsi IS NULL;"
     )
 
     # TASK 2: Deduplicazione tecnica

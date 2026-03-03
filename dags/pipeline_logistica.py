@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from datetime import datetime, timedelta
+from airflow.operators.python import PythonOperator
 
 default_args = {
     'owner': 'andrea',
@@ -17,6 +18,38 @@ with DAG(
     catchup=False,
     tags=['logistica', 'tesi'],
 ) as dag:
+
+    def crea_partizione_mese_prossimo():
+        import psycopg2
+        from datetime import date
+        from dateutil.relativedelta import relativedelta
+        
+        prossimo_mese = date.today().replace(day=1) + relativedelta(months=1)
+        mese_dopo = prossimo_mese + relativedelta(months=1)
+        
+        nome_tabella = f"staging_ais_data_{prossimo_mese.strftime('%Y_%m')}"
+        data_inizio = prossimo_mese.strftime('%Y-%m-01')
+        data_fine = mese_dopo.strftime('%Y-%m-01')
+        
+        conn = psycopg2.connect(
+            host="db_tesi", port="5432",
+            database="logistica_liguria",
+            user="admin_tesi", password="password_sicura"
+        )
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {nome_tabella} PARTITION OF staging_ais_data
+            FOR VALUES FROM ('{data_inizio}') TO ('{data_fine}');
+        """)
+        cur.close()
+        conn.close()
+        print(f"✅ Partizione {nome_tabella} verificata/creata con successo.")
+
+    auto_creazione_partizione = PythonOperator(
+        task_id='auto_creazione_partizione',
+        python_callable=crea_partizione_mese_prossimo,
+    )
 
     # TASK 1: Pulizia (corretto per essere più robusto)
     pulisci_coordinate_nulle = SQLExecuteQueryOperator(
@@ -57,8 +90,8 @@ with DAG(
         task_id='aggiorna_dim_terminal',
         conn_id='connessione_db_tesi', 
         sql="""
-        INSERT INTO dim_terminal (codice_zona, nome_esteso)
-        SELECT DISTINCT terminal_zona, terminal_zona
+        INSERT INTO dim_terminal (codice_zona, nome_esteso, citta)
+        SELECT DISTINCT terminal_zona, terminal_zona, 'Da definire'
         FROM staging_ais_data
         WHERE terminal_zona != 'ALTRO_LIGURIA' AND terminal_zona IS NOT NULL
         ON CONFLICT (codice_zona) DO NOTHING;
@@ -124,4 +157,4 @@ with DAG(
     )
 
     # Esecuzione logica
-    pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze >> aggiorna_kpi_bi
+    auto_creazione_partizione >> pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze >> aggiorna_kpi_bi
