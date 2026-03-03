@@ -101,7 +101,7 @@ Per garantire prestazioni elevate e scalabilità su miliardi di righe, ho adotta
 La tabella di atterraggio accoglie i dati grezzi in tempo reale. Le coordinate sono tipizzate con DECIMAL(9,6) per ottenere una tolleranza spaziale di circa 11 cm, fondamentale per le logiche di precisione sui moli.
 
 <details>
-  <summary><h3>Clicca per visualizzare il codice</h3></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -161,7 +161,7 @@ Oltre al pattern Producer-Consumer, lo script esegue le seguenti operazioni in t
 ### 3. Pipeline ETL in Python
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```python
 import asyncio
@@ -303,7 +303,7 @@ Per garantire la scalabilità della pipeline e gestire migliaia di record AIS in
 * **`idx_ais_mmsi_time`**: Indice composito (`mmsi`, `timestamp_utc DESC`) progettato specificamente per le query di ricostruzione della rotta, riducendo drasticamente i tempi di esecuzione per la ricerca dell'ultima posizione nota.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -329,7 +329,7 @@ L'architettura separa rigorosamente i fatti (eventi dinamici) dalle dimensioni (
   * **`dim_navi`**: Memorizza i dati statici delle navi, come il codice MMSI e il nome (Ship Name). Risolve il problema della ridondanza presente nello staging, dove il nome della nave viene inutilmente ripetuto per ogni singola coordinata inviata.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -352,7 +352,7 @@ ON CONFLICT (mmsi) DO NOTHING;
   * **`dim_terminal`**: Contiene la definizione geografica (poligoni di Geofencing) dei terminal monitorati, quali Genova Voltri (PSA Pra'), Genova Sampierdarena e Vado Gateway. Rende le interrogazioni geografiche indipendenti dal codice applicativo Python.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -376,7 +376,7 @@ ON CONFLICT (codice_zona) DO NOTHING;
   * **`dim_tempo`**: Gerarchia temporale (Ora, Giorno, Mese) pianificata per le analisi aggregate, essenziale per identificare pattern ciclici di congestione.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -408,7 +408,7 @@ ON CONFLICT (data_id) DO NOTHING;
   * **`fact_movimenti`**: È il cuore del sistema analitico. Registra esclusivamente gli eventi di "Ingresso" e "Uscita" dalle aree terminal, relazionando l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -452,7 +452,7 @@ Il ciclo logistico della nave viene frammentato e calcolato in due fasi distinte
 * **Time in Rada (Waiting Time):** Misura il tempo che la nave trascorre nell'area di ancoraggio (identificata come transito o attesa nel Mar Ligure) prima di ricevere l'autorizzazione all'ormeggio. Un valore medio alto in questo KPI è il principale indicatore di congestione del terminal.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -474,7 +474,7 @@ ORDER BY ore_in_rada DESC;
   Questa vista riutilizza la logica delle Window Functions per isolare i periodi di transito o attesa fuori dai terminal logistici, calcolando le ore di permanenza nella zona "ALTRO_LIGURIA".
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 -- Creazione della Vista per il calcolo del Time in Rada (Attesa)
@@ -514,7 +514,7 @@ WHERE r.terminal_zona = 'ALTRO_LIGURIA'
 * **Time in Port (Dwell Time):** Calcolato come differenza matematica tra il timestamp di uscita e quello di entrata dalla zona di geofencing del terminal (`orario_partenza - orario_arrivo`). Rappresenta il tempo effettivo di operatività per il carico/scarico container.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -545,7 +545,7 @@ Tramite viste SQL materializzate, il sistema filtra automaticamente i dati per f
 * **Overstay al Molo:** Identificazione delle navi che superano le soglie standard di permanenza (es. > 72 ore al Vado Gateway), segnalando possibili guasti, ispezioni doganali o inefficienze nelle operazioni di piazzale.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -568,7 +568,7 @@ ORDER BY ore_in_porto DESC;
 * **Colli di Bottiglia Infrastrutturali:** Mappatura delle zone (es. Voltri vs. Sampierdarena) con i più alti tempi di attesa medi, fornendo dati cruciali per l'ottimizzazione dei flussi.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -591,7 +591,7 @@ Per garantire l'affidabilità dei KPI, sono state automatizzate procedure di pul
 * Deduplicazione tecnica degli eventi per assicurare che ogni scalo nave generi un singolo record fattuale nella tabella `fact_movimenti`.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -619,7 +619,7 @@ Per rispondere alle esigenze operative dei terminalisti (es. *Quali navi sono or
 A differenza delle analisi storiche, il monitoraggio in tempo reale deve gestire il problema dei "dati orfani" (navi che escono dall'area di copertura senza inviare il segnale di partenza). Per garantire l'accuratezza del dato, è stato implementato un **Filtro di Recency a 24 ore**: se una nave non trasmette posizioni da oltre un giorno, viene automaticamente esclusa dal monitoraggio live per evitare "falsi positivi" nella dashboard causati da perdite intermittenti del segnale AIS.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
 
@@ -657,7 +657,7 @@ L'ambiente containerizzato è stato espanso per includere i micro-servizi di Air
 Tutti i servizi comunicano internamente tramite una rete Docker dedicata (`tesi_network`), garantendo la risoluzione sicura dei nomi host (l'operatore Airflow si connette al servizio `db_tesi` per l'esecuzione delle query tramite SQLAlchemy).
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```yaml
 x-airflow-common: &airflow-common
@@ -752,7 +752,7 @@ networks:
 La logica di aggiornamento è stata codificata in Python all'interno del file `pipeline_logistica.py`. Il DAG, denominato `pipeline_mar_ligure_completa`, esegue 7 task distinti ed è stato progettato per rispondere a tre requisiti fondamentali del Data Engineering: **Integrità del dato, Idempotenza ed Esecuzione Parallela**.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```python
 from airflow import DAG
@@ -784,7 +784,7 @@ Come teorizzato nella progettazione logica del database, il primo step della pip
 * **`deduplica_staging`**: Rimuove i messaggi identici inviati dalla stessa nave nello stesso istante, mantenendo solo il record più recente tramite il puntatore fisico `ctid`.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```python
     # TASK 1: Pulizia coordinate mancanti
@@ -817,7 +817,7 @@ Per evitare violazioni dei vincoli di chiave esterna (Foreign Key), la pipeline 
 Per ottimizzare i tempi di elaborazione del micro-batch, i due task vengono **eseguiti in parallelo** dallo Scheduler di Airflow. Entrambi utilizzano il costrutto `ON CONFLICT DO NOTHING` per garantire l'idempotenza, permettendo l'esecuzione continua senza generare errori di duplicazione.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```python
     # TASK 3A: Aggiorna l'anagrafica delle navi
@@ -857,7 +857,7 @@ Una volta garantita l'integrità referenziale per le dimensioni nave e terminal,
 * **Partenze (Task 5):** Aggiorna i record "aperti" (con partenza `NULL`). Intercetta l'ultimo orario utile in cui la nave era nel terminal prima di trasmettere un nuovo segnale in mare aperto (`ALTRO_LIGURIA`), chiudendo così il calcolo della sosta.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```python
     # TASK 4: Calcola gli arrivi (Idempotenza Garantita)
@@ -915,7 +915,7 @@ Una volta garantita l'integrità referenziale per le dimensioni nave e terminal,
 L'ultimo step del micro-batch è dedicato all'aggiornamento dei dati per Power BI. Poiché le Viste Materializzate sono "statiche", è compito di Airflow forzarne l'aggiornamento (`REFRESH`) non appena il calcolo dei nuovi movimenti (Arrivi e Partenze) è terminato. Questo garantisce che la dashboard mostri sempre dati allineati in tempo reale, senza mai eseguire calcoli complessi lato BI.
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```python
     # TASK 6: Aggiorna i KPI per Power BI (Refresh Viste Materializzate)
