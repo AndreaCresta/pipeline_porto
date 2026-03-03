@@ -119,9 +119,9 @@ CREATE TABLE staging_ais_data_default PARTITION OF staging_ais_data DEFAULT;
 ```
 
 ## 2.2 Architettura Dati: Table Partitioning (PostgreSQL)
-Per garantire la continuità del servizio senza interventi manuali (Business Continuity), la pipeline include un task dedicato in Apache Airflow. Questo worker verifica mensilmente la data corrente e assicura la creazione della partizione fisica per il mese successivo, prevenendo errori di tipo Out of Range.
+I dati vengono smistati automaticamente in partizioni mensili fisicamente separate (es. `staging_ais_data_2026_03`, `staging_ais_data_2026_04`) tramite `PARTITION BY RANGE (timestamp_utc)`. Questo permette al motore di eseguire la *Partition Pruning*, leggendo esclusivamente i "cassetti" temporali rilevanti e riducendo i tempi di query da minuti a frazioni di secondo.
 
-Logica di automazione: Il task calcola dinamicamente il timestamp del primo giorno del mese entrante ed esegue l'istruzione CREATE TABLE IF NOT EXISTS per garantire che il database sia sempre pronto a ricevere nuovi flussi di dati.
+Per garantire la **Business Continuity** senza interventi manuali, la pipeline include un task dedicato in Airflow che calcola dinamicamente il primo giorno del mese entrante ed esegue `CREATE TABLE IF NOT EXISTS` per creare in anticipo la partizione del mese successivo, prevenendo errori di tipo *Out of Range*.
 
 ```sql
 -- Esempio di comando DDL eseguito dinamicamente da Airflow:
