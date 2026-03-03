@@ -395,9 +395,8 @@ WHERE terminal_zona != 'ALTRO_LIGURIA'
 
 ```
 
-### 3. Logica di Business e KPI Logistici
-
-La modellazione e le pipeline SQL sono state ingegnerizzate per estrarre tre livelli di metriche fondamentali per l'analisi delle performance e la gestione portuale:
+### 3. Logica di Business e KPI Logistici (Ottimizzazione BI)
+Per garantire che le dashboard di Power BI si carichino istantaneamente senza sovraccaricare il database con calcoli complessi on-the-fly, la logica di business non è basata su query dirette o viste standard, ma su **Viste Materializzate (Materialized Views)**. Questa scelta architetturale permette a PostgreSQL di pre-calcolare i KPI logistici e salvarli fisicamente su disco. Power BI leggerà solo questi "fotogrammi" pre-calcolati, riducendo i tempi di interrogazione da minuti a frazioni di secondo.
 
 #### 3.1. Analisi dei Tempi di Ciclo (Turnaround Time)
 Il ciclo logistico della nave viene frammentato e calcolato in due fasi distinte per isolare le inefficienze:
@@ -457,8 +456,8 @@ WHERE r.terminal_zona = 'ALTRO_LIGURIA'
 
 ```sql
 
--- Creazione della Vista per il calcolo del Time in Port e Overstay
-CREATE OR REPLACE VIEW vw_kpi_tempi_porto AS
+-- Creazione della Vista Materializzata per il calcolo del Time in Port e Overstay
+CREATE MATERIALIZED VIEW mv_kpi_tempi_porto AS
 SELECT 
     m.id_movimento,
     m.mmsi,
@@ -466,18 +465,15 @@ SELECT
     t.nome_esteso AS terminal,
     m.orario_arrivo,
     m.orario_partenza,
-    -- 1. Calcolo della permanenza esatta (Giorni e Ore)
-    (m.orario_partenza - m.orario_arrivo) AS permanenza_totale,
-    -- 2. Calcolo della permanenza in ore decimali (Perfetto per i grafici di Power BI)
     ROUND(EXTRACT(EPOCH FROM (m.orario_partenza - m.orario_arrivo)) / 3600, 2) AS ore_in_porto,
-    -- 3. Identificazione Overstay (Flag Vero/Falso se la sosta supera le 72 ore)
     CASE 
         WHEN EXTRACT(EPOCH FROM (m.orario_partenza - m.orario_arrivo)) / 3600 > 72 THEN TRUE 
         ELSE FALSE 
     END AS flag_overstay
 FROM fact_movimenti m
 LEFT JOIN dim_navi n ON m.mmsi = n.mmsi
-LEFT JOIN dim_terminal t ON m.codice_zona = t.codice_zona;
+LEFT JOIN dim_terminal t ON m.codice_zona = t.codice_zona
+WHERE m.orario_partenza IS NOT NULL;
 
 ```
 
@@ -494,9 +490,8 @@ SELECT
     terminal,
     orario_arrivo,
     orario_partenza,
-    permanenza_totale,
     ore_in_porto
-FROM vw_kpi_tempi_porto
+FROM mv_kpi_tempi_porto
 WHERE flag_overstay = TRUE
 ORDER BY ore_in_porto DESC;
 
@@ -506,14 +501,14 @@ ORDER BY ore_in_porto DESC;
 
 ```sql
 
--- Vista per il confronto delle performance tra i terminal (Bottlenecks)
-CREATE OR REPLACE VIEW vw_kpi_confronto_terminal AS
+-- Vista Materializzata per il confronto delle performance tra i terminal (Bottlenecks)
+CREATE MATERIALIZED VIEW mv_kpi_confronto_terminal AS
 SELECT 
     terminal,
     COUNT(id_movimento) as numero_scali,
     ROUND(AVG(ore_in_porto), 2) as media_ore_permanenza,
     SUM(CASE WHEN flag_overstay THEN 1 ELSE 0 END) as totale_overstay
-FROM vw_kpi_tempi_porto
+FROM mv_kpi_tempi_porto
 GROUP BY terminal;
 
 ```
@@ -539,7 +534,6 @@ WHERE a.ctid < b.ctid
   AND a.timestamp_utc = b.timestamp_utc;
 
 ```
-
 
 ---
 
@@ -781,13 +775,27 @@ Una volta garantita l'integrità referenziale per le dimensioni nave e terminal,
         """
     )
 ```
+#### 3.2.4 Ottimizzazione per Business Intelligence (Task 6)
+L'ultimo step del micro-batch è dedicato all'aggiornamento dei dati per Power BI. Poiché le Viste Materializzate sono "statiche", è compito di Airflow forzarne l'aggiornamento (`REFRESH`) non appena il calcolo dei nuovi movimenti (Arrivi e Partenze) è terminato. Questo garantisce che la dashboard mostri sempre dati allineati in tempo reale, senza mai eseguire calcoli complessi lato BI.
+
+```python
+    # TASK 6: Aggiorna i KPI per Power BI (Refresh Viste Materializzate)
+    aggiorna_kpi_bi = SQLExecuteQueryOperator(
+        task_id='aggiorna_kpi_bi',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        REFRESH MATERIALIZED VIEW mv_kpi_tempi_porto;
+        REFRESH MATERIALIZED VIEW mv_kpi_confronto_terminal;
+        """
+    )
+```
 
 ### 3.3 Orchestrazione e Monitoraggio
 Il flusso logico finale è vincolato dalla seguente istruzione Python, che impone al motore di Airflow le corrette dipendenze topologiche:
 
 ```python
 # Esecuzione logica: Pulizia -> Aggiornamento Dimensioni in parallelo -> Calcolo Arrivi -> Chiusura Partenze
-pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze
+pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze >> aggiorna_kpi_bi
 ```
 
 Questa configurazione garantisce che il caricamento della Fact Table avvenga *esclusivamente* se la fase di Data Cleansing e il censimento parallelo delle dimensioni si sono conclusi con successo, preservando l'assoluta coerenza strutturale del Data Warehouse.

@@ -105,5 +105,15 @@ with DAG(
         """
     )
 
-    # Flusso logico
-    pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze
+    # TASK 6: Aggiorna i KPI per Power BI (Refresh Viste Materializzate)
+    aggiorna_kpi_bi = SQLExecuteQueryOperator(
+        task_id='aggiorna_kpi_bi',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        REFRESH MATERIALIZED VIEW mv_kpi_tempi_porto;
+        REFRESH MATERIALIZED VIEW mv_kpi_confronto_terminal;
+        """
+    )
+
+    # Esecuzione logica
+    pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze >> aggiorna_kpi_bi
