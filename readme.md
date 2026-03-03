@@ -164,7 +164,7 @@ DB_HOST = "localhost"
 DB_PORT = "5432"
 DB_NAME = "logistica_liguria"
 DB_USER = "admin_tesi"
-DB_PASS = "password_sicura"
+DB_PASS = "[INSERISCI LA TUA PASSWORD]"
 
 BATCH_SIZE = 100  # Numero di navi da salvare in un colpo solo
 QUEUE = asyncio.Queue() # La "Coda" di parcheggio in memoria
@@ -590,7 +590,7 @@ x-airflow-common: &airflow-common
   image: apache/airflow:2.8.1
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin_tesi:password_sicura@db_tesi:5432/logistica_liguria
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin_tesi:[INSERISCI LA TUA PASSWORD]@db_tesi:5432/logistica_liguria
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
   volumes:
     - ./dags:/opt/airflow/dags
