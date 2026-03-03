@@ -90,9 +90,13 @@ volumes:
 *Nota tecnica:* Ho adottato PostgreSQL 18 per sfruttare le recenti performance di I/O asincrono. Questo ha richiesto la mappatura del volume direttamente su `/var/lib/postgresql` per mantenere la compatibilità con il nuovo sistema di gestione dei metadati della v18.
 
 ### 2. Data Definition Language (DDL)
-Ho modellato la tabella di atterraggio (Staging) per accogliere i dati grezzi in tempo reale. Ho tipizzato le coordinate con `DECIMAL(9,6)` per ottenere una tolleranza spaziale di circa 11 cm, un requisito stringente per le successive logiche di geofencing al molo.
+Per garantire prestazioni elevate e scalabilità su miliardi di righe, ho adottato un'architettura basata sul **Table Partitioning** nativo di PostgreSQL. Questo approccio permette al database di eseguire il Partition Pruning, leggendo esclusivamente i "cassetti" temporali rilevanti e ignorando il resto dello storico, riducendo i tempi di query da minuti a frazioni di secondo.
+
+#### 2.1 Tabella di staging e Geofencing
+La tabella di atterraggio accoglie i dati grezzi in tempo reale. Le coordinate sono tipizzate con DECIMAL(9,6) per ottenere una tolleranza spaziale di circa 11 cm, fondamentale per le logiche di precisione sui moli.
 
 ```sql
+
 CREATE TABLE staging_ais_data (
     mmsi VARCHAR(20),
     ship_name TEXT,
@@ -100,10 +104,31 @@ CREATE TABLE staging_ais_data (
     lat DECIMAL(9,6),
     lon DECIMAL(9,6),
     timestamp_utc TIMESTAMP
-);
+) PARTITION BY RANGE (timestamp_utc);
+
+-- Definizione delle Partizioni Mensili
+CREATE TABLE staging_ais_data_2026_02 PARTITION OF staging_ais_data
+    FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+
+CREATE TABLE staging_ais_data_2026_03 PARTITION OF staging_ais_data
+    FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
+
+-- Partizione di Default (per catturare eventuali dati fuori intervallo)
+CREATE TABLE staging_ais_data_default PARTITION OF staging_ais_data DEFAULT;
+
 ```
-## 2.1 Architettura Dati: Table Partitioning (PostgreSQL)
-Per garantire prestazioni elevate nel lungo periodo e ottimizzare i tempi di lettura (soprattutto in vista di miliardi di righe), la tabella `staging_ais_data` non è una tabella monolitica, ma è stata progettata utilizzando il **Table Partitioning** nativo di PostgreSQL.
+
+## 2.2 Architettura Dati: Table Partitioning (PostgreSQL)
+Per garantire la continuità del servizio senza interventi manuali (Business Continuity), la pipeline include un task dedicato in Apache Airflow. Questo worker verifica mensilmente la data corrente e assicura la creazione della partizione fisica per il mese successivo, prevenendo errori di tipo Out of Range.
+
+Logica di automazione: Il task calcola dinamicamente il timestamp del primo giorno del mese entrante ed esegue l'istruzione CREATE TABLE IF NOT EXISTS per garantire che il database sia sempre pronto a ricevere nuovi flussi di dati.
+
+```sql
+-- Esempio di comando DDL eseguito dinamicamente da Airflow:
+CREATE TABLE IF NOT EXISTS staging_ais_data_YYYY_MM PARTITION OF staging_ais_data
+FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-MM-01' + INTERVAL '1 month');
+
+```
 
 * **Metodo:** `PARTITION BY RANGE (timestamp_utc)`
 * **Logica:** I dati vengono smistati automaticamente in partizioni mensili fisicamente separate (es. `staging_ais_data_2026_03`, `staging_ais_data_2026_04`).
@@ -249,7 +274,7 @@ if __name__ == "__main__":
 
 ---
 
-## Fase 2: Processing & Data Modeling
+## Processing & Data Modeling
 
 L'obiettivo di questa fase è la trasformazione del dato "grezzo" (Raw Data) in "informazione strutturata" (Analytics-Ready Data) per rispondere ai requisiti logistici della tesi. In questa fase, il sistema evolve da una singola tabella di atterraggio a uno **Star Schema** ottimizzato per il calcolo dei KPI.
 
@@ -354,44 +379,27 @@ CREATE TABLE fact_movimenti (
     codice_zona VARCHAR(50) REFERENCES dim_terminal(codice_zona),
     orario_arrivo TIMESTAMP,
     orario_partenza TIMESTAMP,
-    data_elaborazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    data_elaborazione TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_movimento_nave UNIQUE (mmsi, orario_arrivo)
 );
 ```
 
 ```sql
 
--- Estrazione degli eventi logistici e inserimento nella Fact Table
-INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo, orario_partenza)
-WITH cambi_stato AS (
-    -- Step A: Affianchiamo a ogni record la zona in cui si trovava la nave nel record precedente
-    SELECT 
-        mmsi,
-        terminal_zona,
-        timestamp_utc,
-        LAG(terminal_zona) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) as zona_precedente
-    FROM staging_ais_data
-    WHERE mmsi IS NOT NULL
-),
-arrivi_partenze AS (
-    -- Step B: Teniamo solo i momenti in cui la zona CAMBIA (è un Arrivo).
-    -- Usiamo LEAD per cercare il timestamp del prossimo cambio di zona (che sarà la Partenza).
+INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo)
+SELECT mmsi, terminal_zona, orario_arrivo
+FROM (
     SELECT 
         mmsi,
         terminal_zona,
         timestamp_utc AS orario_arrivo,
-        LEAD(timestamp_utc) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) AS orario_partenza
-    FROM cambi_stato
-    WHERE terminal_zona IS DISTINCT FROM zona_precedente
-)
--- Step C: Filtriamo e salviamo solo gli scali reali nei porti (ignorando il transito in mare aperto)
-SELECT 
-    mmsi,
-    terminal_zona AS codice_zona,
-    orario_arrivo,
-    orario_partenza
-FROM arrivi_partenze
+        LAG(terminal_zona) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) as zona_precedente
+    FROM staging_ais_data
+    WHERE mmsi IS NOT NULL
+) sub
 WHERE terminal_zona != 'ALTRO_LIGURIA' 
-  AND orario_partenza IS NOT NULL;
+  AND terminal_zona IS DISTINCT FROM zona_precedente
+ON CONFLICT (mmsi, orario_arrivo) DO NOTHING;
 
 ```
 
@@ -456,7 +464,6 @@ WHERE r.terminal_zona = 'ALTRO_LIGURIA'
 
 ```sql
 
--- Creazione della Vista Materializzata per il calcolo del Time in Port e Overstay
 CREATE MATERIALIZED VIEW mv_kpi_tempi_porto AS
 SELECT 
     m.id_movimento,
@@ -465,15 +472,15 @@ SELECT
     t.nome_esteso AS terminal,
     m.orario_arrivo,
     m.orario_partenza,
-    ROUND(EXTRACT(EPOCH FROM (m.orario_partenza - m.orario_arrivo)) / 3600, 2) AS ore_in_porto,
+    -- Se la nave non è ancora partita, calcola il tempo fino ad ORA (NOW())
+    ROUND(EXTRACT(EPOCH FROM (COALESCE(m.orario_partenza, NOW()) - m.orario_arrivo)) / 3600, 2) AS ore_in_porto,
     CASE 
-        WHEN EXTRACT(EPOCH FROM (m.orario_partenza - m.orario_arrivo)) / 3600 > 72 THEN TRUE 
+        WHEN EXTRACT(EPOCH FROM (COALESCE(m.orario_partenza, NOW()) - m.orario_arrivo)) / 3600 > 72 THEN TRUE 
         ELSE FALSE 
     END AS flag_overstay
 FROM fact_movimenti m
 LEFT JOIN dim_navi n ON m.mmsi = n.mmsi
-LEFT JOIN dim_terminal t ON m.codice_zona = t.codice_zona
-WHERE m.orario_partenza IS NOT NULL;
+LEFT JOIN dim_terminal t ON m.codice_zona = t.codice_zona;
 
 ```
 
@@ -501,7 +508,6 @@ ORDER BY ore_in_porto DESC;
 
 ```sql
 
--- Vista Materializzata per il confronto delle performance tra i terminal (Bottlenecks)
 CREATE MATERIALIZED VIEW mv_kpi_confronto_terminal AS
 SELECT 
     terminal,
@@ -826,7 +832,7 @@ Il flusso logico finale è vincolato dalla seguente istruzione Python, che impon
 
 ```python
 # Esecuzione logica: Pulizia -> Aggiornamento Dimensioni in parallelo -> Calcolo Arrivi -> Chiusura Partenze
-pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze >> aggiorna_kpi_bi
+auto_creazione_partizione >> pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze >> aggiorna_kpi_bi
 ```
 
 Questa configurazione garantisce che il caricamento della Fact Table avvenga *esclusivamente* se la fase di Data Cleansing e il censimento parallelo delle dimensioni si sono conclusi con successo, preservando l'assoluta coerenza strutturale del Data Warehouse.

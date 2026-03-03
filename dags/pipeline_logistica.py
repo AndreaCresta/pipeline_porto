@@ -38,7 +38,7 @@ with DAG(
         """
     )
 
-    # TASK 3A: Aggiorna Navi (Sistemata con DISTINCT ON)
+    # TASK 3A: Aggiorna Navi
     aggiorna_dim_navi = SQLExecuteQueryOperator(
         task_id='aggiorna_dim_navi',
         conn_id='connessione_db_tesi', 
