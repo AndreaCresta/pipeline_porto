@@ -39,23 +39,32 @@ async def websocket_listener():
         "FilterMessageTypes": ["PositionReport"]
     }
 
-    async with websockets.connect(url) as websocket:
-        await websocket.send(json.dumps(subscribe_message))
-        print("📡 Lavoratore A: Connesso all'API! Inizio a riempire la coda...\n" + "-"*50)
+    # Aggiungiamo un loop infinito per l'auto-riconnessione
+    while True:
+        try:
+            print("📡 Lavoratore A: Tentativo di connessione all'API AISStream...")
+            async with websockets.connect(url) as websocket:
+                await websocket.send(json.dumps(subscribe_message))
+                print("✅ Lavoratore A: Connesso all'API! Inizio a riempire la coda...\n" + "-"*50)
 
-        async for message in websocket:
-            data = json.loads(message)
-            
-            mmsi = data['MetaData']['MMSI']
-            ship_name = data['MetaData']['ShipName']
-            lat = data['MetaData']['latitude']
-            lon = data['MetaData']['longitude']
-            time_utc = data['MetaData']['time_utc'].split('.')[0]
-            zona = identifica_terminal(lat, lon)
+                async for message in websocket:
+                    data = json.loads(message)
+                    
+                    mmsi = data['MetaData']['MMSI']
+                    ship_name = data['MetaData']['ShipName']
+                    lat = data['MetaData']['latitude']
+                    lon = data['MetaData']['longitude']
+                    time_utc = data['MetaData']['time_utc'].split('.')[0]
+                    zona = identifica_terminal(lat, lon)
 
-            # Crea una tupla col dato e lo sbatte SUBITO nella coda in memoria
-            record = (mmsi, ship_name, zona, lat, lon, time_utc)
-            await QUEUE.put(record)
+                    # Crea una tupla col dato e lo sbatte SUBITO nella coda in memoria
+                    record = (mmsi, ship_name, zona, lat, lon, time_utc)
+                    await QUEUE.put(record)
+                    
+        except Exception as e:
+            # Se la rete cade, va in timeout o il server li caccia, lo script non muore.
+            print(f"⚠️ Lavoratore A: Errore di connessione API ({e}). Riprovo tra 5 secondi...")
+            await asyncio.sleep(5) # Aspetta 5 secondi e poi il ciclo "while" riparte!
 
 # --- 3B. Lavoratore B (SCRITTORE: CODA -> DATABASE) ---
 async def db_writer():

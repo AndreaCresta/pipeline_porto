@@ -102,8 +102,12 @@ CREATE TABLE staging_ais_data (
     timestamp_utc TIMESTAMP
 );
 ```
+## 2.1 Architettura Dati: Table Partitioning (PostgreSQL)
+Per garantire prestazioni elevate nel lungo periodo e ottimizzare i tempi di lettura (soprattutto in vista di miliardi di righe), la tabella `staging_ais_data` non è una tabella monolitica, ma è stata progettata utilizzando il **Table Partitioning** nativo di PostgreSQL.
 
-### 3. Pipeline ETL in Python
+* **Metodo:** `PARTITION BY RANGE (timestamp_utc)`
+* **Logica:** I dati vengono smistati automaticamente in partizioni mensili fisicamente separate (es. `staging_ais_data_2026_03`, `staging_ais_data_2026_04`).
+* **Vantaggi per l'Analisi:** Quando la pipeline o Power BI eseguono query analitiche o calcolano KPI (es. Dwell Time) su un periodo specifico, il motore del database esegue la *Partition Pruning*, leggendo esclusivamente i "cassetti" mensili rilevanti e ignorando il resto dello storico, riducendo i tempi di query da minuti a frazioni di secondo.
 
 ## Architettura di Data Ingestion: Pattern Producer-Consumer
 Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **Asincrona con coda in memoria (Buffering)** basata su `asyncio`.
@@ -112,18 +116,19 @@ Il flusso è diviso in due worker indipendenti:
 1. **Producer (Ricevitore API):** Ascolta il websocket in tempo reale. Appena riceve un JSON, lo decodifica, applica la logica di *Geofencing* per identificare il terminal e inserisce la tupla pulita in una `asyncio.Queue()`.
 2. **Consumer (Scrittore DB):** Monitora la coda. Invece di eseguire una singola `INSERT` per ogni nave (che saturerebbe la rete), estrae fino a 100 record alla volta e li scrive nel database con una singola istruzione di **Batch Insert** (`execute_values` di `psycopg2`).
 
-
-
 **Vantaggi ottenuti:**
 * **Resilienza (Buffering):** Se il database rallenta, i dati si accumulano temporaneamente nella coda in RAM senza essere persi (il websocket non deve "aspettare").
 * **Performance:** La scrittura a blocchi abbatte drasticamente il carico su PostgreSQL, permettendo di ingerire migliaia di segnali al secondo.
 
-Ho sviluppato lo script `ingestion_pipeline.py` per connettersi in streaming WebSocket all'API di AISStream. Lo script esegue le seguenti operazioni in volo (In-Flight Processing):
+### Elaborazione in Volo (In-Flight Processing)
+Oltre al pattern Producer-Consumer, lo script esegue le seguenti operazioni in tempo reale durante l'ingestion:
 
 1. **Estrazione e Filtraggio:** Richiede solo i messaggi di tipo "PositionReport" all'interno di specifiche Bounding Boxes (Genova e Vado Ligure).
 2. **Trasformazione (Geofencing):** Valuta latitudine e longitudine in real-time, assegnando un'etichetta di zona (es. `GENOVA_VOLTRI`, `VADO_GATEWAY`) tramite poligoni predefiniti.
-3. **Data Cleansing:** Intercetta e normalizza i timestamp. Ho implementato un blocco che tronca i nanosecondi forniti dall'API (`.split('.')[0]`) per renderli compatibili con lo standard ISO richiesto da PostgreSQL.
-4. **Caricamento Sicuro:** Scrive i record nel container Postgres utilizzando query SQL parametrizzate tramite `psycopg2` per prevenire vulnerabilità di injection.
+3. **Data Cleansing:** Intercetta e normalizza i timestamp. Il codice tronca i nanosecondi forniti dall'API (`.split('.')[0]`) per renderli compatibili con lo standard ISO richiesto da PostgreSQL.
+4. **Caricamento Sicuro:** Scrive i record utilizzando query SQL parametrizzate (`execute_values`) per prevenire vulnerabilità di SQL injection e ottimizzare le risorse di rete.
+
+### 3. Pipeline ETL in Python
 
 ```python
 import asyncio
@@ -707,14 +712,14 @@ Per ottimizzare i tempi di elaborazione del micro-batch, i due task vengono **es
         conn_id='connessione_db_tesi', 
         sql="""
         INSERT INTO dim_navi (mmsi, ship_name)
-        SELECT mmsi, MAX(ship_name) AS ship_name
+        SELECT DISTINCT ON (mmsi) mmsi, ship_name
         FROM staging_ais_data
         WHERE mmsi IS NOT NULL
-        GROUP BY mmsi
-        ON CONFLICT (mmsi) DO NOTHING;
+        ORDER BY mmsi, timestamp_utc DESC
+        ON CONFLICT (mmsi) DO UPDATE SET ship_name = EXCLUDED.ship_name;
         """
     )
-    
+
     # TASK 3B: Aggiorna le zone portuali in parallelo
     aggiorna_dim_terminal = SQLExecuteQueryOperator(
         task_id='aggiorna_dim_terminal',
@@ -730,44 +735,49 @@ Per ottimizzare i tempi di elaborazione del micro-batch, i due task vengono **es
     )
 ```
 
-#### 3.2.3 Elaborazione dei Tempi di Permanenza (Fact Table)
-Una volta garantita l'integrità referenziale per le dimensioni nave e terminal, il task finale esegue il calcolo effettivo degli arrivi e delle partenze tramite le Window Functions (`LAG` e `LEAD`). Anche questo task è reso idempotente tramite un'istruzione iniziale di `TRUNCATE TABLE fact_movimenti CASCADE`, che previene la duplicazione dei movimenti storicizzati a ogni nuova elaborazione del DAG.
+> #### 3.2.3 Elaborazione dei Tempi di Permanenza (Fact Table)
+> Una volta garantita l'integrità referenziale per le dimensioni nave e terminal, gli ultimi due task calcolano in modo incrementale gli eventi logistici. Invece di ricalcolare tutto lo storico, il sistema gestisce arrivi e partenze separatamente:
+> * **Arrivi (Task 4):** Identifica il primo segnale di ingresso nel terminal e crea il record. L'idempotenza è garantita dalla clausola `ON CONFLICT DO NOTHING` (basata sul vincolo di unicità), che impedisce la duplicazione se il DAG rielabora lo stesso dato.
+> * **Partenze (Task 5):** Aggiorna i record "aperti" (con partenza `NULL`). Intercetta l'ultimo orario utile in cui la nave era nel terminal prima di trasmettere un nuovo segnale in mare aperto (`ALTRO_LIGURIA`), chiudendo così il calcolo della sosta.
 
 ```python
-    # TASK 4: Calcola gli arrivi e le partenze
+    # TASK 4: Calcola gli arrivi
     aggiorna_fact_movimenti = SQLExecuteQueryOperator(
         task_id='aggiorna_fact_movimenti',
         conn_id='connessione_db_tesi', 
         sql="""
-        TRUNCATE TABLE fact_movimenti CASCADE;
-        
-        INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo, orario_partenza)
-        WITH cambi_stato AS (
-            SELECT 
-                mmsi,
-                terminal_zona,
-                timestamp_utc,
-                LAG(terminal_zona) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) as zona_precedente
-            FROM staging_ais_data
-            WHERE mmsi IS NOT NULL
-        ),
-        arrivi_partenze AS (
-            SELECT 
-                mmsi,
-                terminal_zona,
-                timestamp_utc AS orario_arrivo,
-                LEAD(timestamp_utc) OVER (PARTITION BY mmsi ORDER BY timestamp_utc) AS orario_partenza
-            FROM cambi_stato
-            WHERE terminal_zona IS DISTINCT FROM zona_precedente
-        )
-        SELECT 
-            mmsi,
-            terminal_zona AS codice_zona,
-            orario_arrivo,
-            orario_partenza
-        FROM arrivi_partenze
-        WHERE terminal_zona != 'ALTRO_LIGURIA' 
-          AND orario_partenza IS NOT NULL;
+        INSERT INTO fact_movimenti (mmsi, codice_zona, orario_arrivo)
+        SELECT DISTINCT ON (mmsi, terminal_zona, timestamp_utc)
+            mmsi, terminal_zona, timestamp_utc
+        FROM staging_ais_data
+        WHERE terminal_zona != 'ALTRO_LIGURIA'
+        ORDER BY mmsi, terminal_zona, timestamp_utc ASC
+        ON CONFLICT DO NOTHING;
+        """
+    )
+
+    # TASK 5: Calcola le partenze
+    aggiorna_partenze = SQLExecuteQueryOperator(
+        task_id='aggiorna_partenze',
+        conn_id='connessione_db_tesi', 
+        sql="""
+        UPDATE fact_movimenti f
+        SET orario_partenza = sub.ultima_visto
+        FROM (
+            SELECT s1.mmsi, s1.terminal_zona, MAX(s1.timestamp_utc) as ultima_visto
+            FROM staging_ais_data s1
+            WHERE s1.terminal_zona != 'ALTRO_LIGURIA'
+            AND EXISTS (
+                SELECT 1 FROM staging_ais_data s2 
+                WHERE s2.mmsi = s1.mmsi 
+                AND s2.timestamp_utc > s1.timestamp_utc 
+                AND s2.terminal_zona = 'ALTRO_LIGURIA'
+            )
+            GROUP BY s1.mmsi, s1.terminal_zona
+        ) sub
+        WHERE f.mmsi = sub.mmsi 
+          AND f.codice_zona = sub.terminal_zona 
+          AND f.orario_partenza IS NULL;
         """
     )
 ```
@@ -776,8 +786,8 @@ Una volta garantita l'integrità referenziale per le dimensioni nave e terminal,
 Il flusso logico finale è vincolato dalla seguente istruzione Python, che impone al motore di Airflow le corrette dipendenze topologiche:
 
 ```python
-# Esecuzione logica: Pulizia -> Aggiornamento Dimensioni in parallelo -> Calcolo Fatti
-pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti
+# Esecuzione logica: Pulizia -> Aggiornamento Dimensioni in parallelo -> Calcolo Arrivi -> Chiusura Partenze
+pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze
 ```
 
 Questa configurazione garantisce che il caricamento della Fact Table avvenga *esclusivamente* se la fase di Data Cleansing e il censimento parallelo delle dimensioni si sono conclusi con successo, preservando l'assoluta coerenza strutturale del Data Warehouse.
