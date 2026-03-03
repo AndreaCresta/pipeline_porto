@@ -534,7 +534,30 @@ WHERE a.ctid < b.ctid
   AND a.timestamp_utc = b.timestamp_utc;
 
 ```
+### 3.4 Monitoraggio Real-Time: Navi Presenti in Porto
+Per rispondere alle esigenze operative dei terminalisti (es. *Quali navi sono ormeggiate in questo istante?*), il sistema espone una vista dinamica che identifica le unità navali attualmente in banchina. 
 
+#### Filtro di Recency e Gestione Segnale Intermittente
+A differenza delle analisi storiche, il monitoraggio in tempo reale deve gestire il problema dei "dati orfani" (navi che escono dall'area di copertura senza inviare il segnale di partenza). Per garantire l'accuratezza del dato, è stato implementato un **Filtro di Recency a 24 ore**: se una nave non trasmette posizioni da oltre un giorno, viene automaticamente esclusa dal monitoraggio live per evitare "falsi positivi" nella dashboard causati da perdite intermittenti del segnale AIS.
+
+```sql
+
+-- Creazione della vista di monitoraggio live
+CREATE VIEW vw_navi_presenti_ora AS
+SELECT 
+    f.mmsi,
+    n.ship_name,
+    t.nome_esteso AS terminal,
+    f.orario_arrivo,
+    -- Calcolo dinamico della sosta in corso rispetto al tempo reale
+    ROUND(EXTRACT(EPOCH FROM (NOW() - f.orario_arrivo)) / 3600, 2) AS ore_permanenza_attuale
+FROM fact_movimenti f
+LEFT JOIN dim_navi n ON f.mmsi = n.mmsi
+LEFT JOIN dim_terminal t ON f.codice_zona = t.codice_zona
+WHERE f.orario_partenza IS NULL                       -- Solo movimenti non ancora conclusi
+  AND f.orario_arrivo > NOW() - INTERVAL '24 hours'; -- Filtro di Recency (24h)
+
+```
 ---
 
 ## Fase 3: Orchestrazione e Automazione (Apache Airflow)
