@@ -101,7 +101,7 @@ Per garantire prestazioni elevate e scalabilità su miliardi di righe, ho adotta
 La tabella di atterraggio accoglie i dati grezzi in tempo reale. Le coordinate sono tipizzate con DECIMAL(9,6) per ottenere una tolleranza spaziale di circa 11 cm, fondamentale per le logiche di precisione sui moli.
 
 <details>
-  <summary><b>\Clicca per visualizzare il codice</b></summary>
+  <summary><h3>Clicca per visualizzare il codice</h3></summary>
 
 ```sql
 
