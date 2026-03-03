@@ -58,7 +58,7 @@ In questa prima fase ho progettato e implementato l'intera pipeline di acquisizi
 Ho scelto di containerizzare l'ambiente di database tramite Docker per garantire la totale riproducibilità del sistema, isolandolo dal sistema operativo host. Ho sviluppato il seguente `docker-compose.yml`:
 
 <details>
-  <summary><b>Clicca per visualizzare il codice</b></summary>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```yaml
 version: '3.8'
