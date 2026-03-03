@@ -104,6 +104,20 @@ CREATE TABLE staging_ais_data (
 ```
 
 ### 3. Pipeline ETL in Python
+
+## Architettura di Data Ingestion: Pattern Producer-Consumer
+Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **Asincrona con coda in memoria (Buffering)** basata su `asyncio`.
+
+Il flusso è diviso in due worker indipendenti:
+1. **Producer (Ricevitore API):** Ascolta il websocket in tempo reale. Appena riceve un JSON, lo decodifica, applica la logica di *Geofencing* per identificare il terminal e inserisce la tupla pulita in una `asyncio.Queue()`.
+2. **Consumer (Scrittore DB):** Monitora la coda. Invece di eseguire una singola `INSERT` per ogni nave (che saturerebbe la rete), estrae fino a 100 record alla volta e li scrive nel database con una singola istruzione di **Batch Insert** (`execute_values` di `psycopg2`).
+
+
+
+**Vantaggi ottenuti:**
+* **Resilienza (Buffering):** Se il database rallenta, i dati si accumulano temporaneamente nella coda in RAM senza essere persi (il websocket non deve "aspettare").
+* **Performance:** La scrittura a blocchi abbatte drasticamente il carico su PostgreSQL, permettendo di ingerire migliaia di segnali al secondo.
+
 Ho sviluppato lo script `ingestion_pipeline.py` per connettersi in streaming WebSocket all'API di AISStream. Lo script esegue le seguenti operazioni in volo (In-Flight Processing):
 
 1. **Estrazione e Filtraggio:** Richiede solo i messaggi di tipo "PositionReport" all'interno di specifiche Bounding Boxes (Genova e Vado Ligure).
@@ -116,15 +130,20 @@ import asyncio
 import websockets
 import json
 import psycopg2
+from psycopg2 import Error
+from psycopg2.extras import execute_values # Ottimizzato per inserimenti multipli
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "database": "logistica_liguria",
-    "user": "admin_tesi",
-    "password": "[INSERISCI LA TUA PASSWORD]"
-}
+# --- 1. CONFIGURAZIONE DATABASE E CODA ---
+DB_HOST = "localhost"
+DB_PORT = "5432"
+DB_NAME = "logistica_liguria"
+DB_USER = "admin_tesi"
+DB_PASS = "password_sicura"
 
+BATCH_SIZE = 100  # Numero di navi da salvare in un colpo solo
+QUEUE = asyncio.Queue() # La "Coda" di parcheggio in memoria
+
+# --- 2. LOGICA DI BUSINESS (Geofencing) ---
 def identifica_terminal(lat, lon):
     if 44.420 <= lat <= 44.435 and 8.740 <= lon <= 8.785:
         return "GENOVA_VOLTRI"
@@ -134,36 +153,90 @@ def identifica_terminal(lat, lon):
         return "GENOVA_SAMPIERDARENA"
     return "ALTRO_LIGURIA"
 
-async def get_port_data():
-    api_key = "INSERIRE_API_KEY"
+# --- 3A. Lavoratore A (RICEVITORE: API -> CODA) ---
+async def websocket_listener():
+    api_key = "b7f29d875e4c6ccd444fd2c0e1d22a2a0ef57f9a"
     url = "wss://stream.aisstream.io/v0/stream"
 
-    conn = psycopg2.connect(**DB_CONFIG)
-    cursor = conn.cursor()
+    subscribe_message = {
+        "APIKey": api_key,
+        "BoundingBoxes": [
+            [[44.380, 8.700], [44.450, 8.950]],
+            [[44.240, 8.400], [44.300, 8.500]]
+        ],
+        "FilterMessageTypes": ["PositionReport"]
+    }
 
     async with websockets.connect(url) as websocket:
-        sub_msg = {
-            "APIKey": api_key,
-            "BoundingBoxes": [[[44.38, 8.70], [44.45, 8.95]], [[44.24, 8.40], [44.30, 8.50]]],
-            "FilterMessageTypes": ["PositionReport"]
-        }
-        await websocket.send(json.dumps(sub_msg))
+        await websocket.send(json.dumps(subscribe_message))
+        print("📡 Lavoratore A: Connesso all'API! Inizio a riempire la coda...\n" + "-"*50)
 
         async for message in websocket:
             data = json.loads(message)
-            meta = data['MetaData']
             
-            # Normalizzazione del timestamp per compatibilità con PostgreSQL 18
-            clean_time = meta['time_utc'].split('.')[0]
-            zona = identifica_terminal(meta['latitude'], meta['longitude'])
+            mmsi = data['MetaData']['MMSI']
+            ship_name = data['MetaData']['ShipName']
+            lat = data['MetaData']['latitude']
+            lon = data['MetaData']['longitude']
+            time_utc = data['MetaData']['time_utc'].split('.')[0]
+            zona = identifica_terminal(lat, lon)
 
-            query = """INSERT INTO staging_ais_data (mmsi, ship_name, terminal_zona, lat, lon, timestamp_utc) 
-                       VALUES (%s, %s, %s, %s, %s, %s)"""
-            cursor.execute(query, (meta['MMSI'], meta['ShipName'], zona, meta['latitude'], meta['longitude'], clean_time))
-            conn.commit()
-            print(f"Salvato: [{zona}] {meta['ShipName']}")
+            # Crea una tupla col dato e lo sbatte SUBITO nella coda in memoria
+            record = (mmsi, ship_name, zona, lat, lon, time_utc)
+            await QUEUE.put(record)
 
-asyncio.run(get_port_data())
+# --- 3B. Lavoratore B (SCRITTORE: CODA -> DATABASE) ---
+async def db_writer():
+    try:
+        print("🔄 Lavoratore B: Connessione al database PostgreSQL in corso...")
+        connessione = psycopg2.connect(host=DB_HOST, port=DB_PORT, database=DB_NAME, user=DB_USER, password=DB_PASS)
+        cursore = connessione.cursor()
+        print("✅ Lavoratore B: Database connesso! Pronto a scaricare la coda.")
+
+        while True:
+            batch = []
+            
+            # 1. Si ferma ad aspettare che ci sia almeno un segnale nella coda
+            record = await QUEUE.get()
+            batch.append(record)
+            
+            # 2. Se la coda è piena, raccoglie velocemente gli altri (fino a 100)
+            while len(batch) < BATCH_SIZE and not QUEUE.empty():
+                batch.append(QUEUE.get_nowait())
+            
+            # 3. Scrive tutto il blocco nel DB con UNA SOLA operazione!
+            sql_insert = """
+                INSERT INTO staging_ais_data (mmsi, ship_name, terminal_zona, lat, lon, timestamp_utc)
+                VALUES %s;
+            """
+            # execute_values fa la "Batch Insert", migliaia di volte più veloce
+            execute_values(cursore, sql_insert, batch)
+            connessione.commit()
+            
+            print(f"💾 Salvato un blocco di {len(batch)} navi in un colpo solo! (Rimaste in coda: {QUEUE.qsize()})")
+
+    except Error as e:
+        print(f"❌ Errore del Database: {e}")
+    finally:
+        if 'connessione' in locals() and connessione:
+            cursore.close()
+            connessione.close()
+            print("\n🔒 Connessione al database chiusa in modo sicuro.")
+
+# --- 4. AVVIO DEL PROGRAMMA ---
+async def main():
+    # Facciamo partire ENTRAMBI i lavoratori in parallelo (Coroutines)
+    task_ricevitore = asyncio.create_task(websocket_listener())
+    task_scrittore = asyncio.create_task(db_writer())
+    
+    # Il programma non si ferma finché non c'è un errore o uno stop manuale
+    await asyncio.gather(task_ricevitore, task_scrittore)
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n🛑 Monitoraggio interrotto manualmente.")
 ```
 
 <img width="852" height="531" alt="stagin_ais_data" src="https://github.com/user-attachments/assets/cf8d9bea-1053-4320-bd86-763b4aab22e6" />
