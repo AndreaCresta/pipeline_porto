@@ -778,7 +778,47 @@ with DAG(
 
 </details>
 
-#### 3.2.1 Data Cleansing Automatizzato
+#### 3.2.1 Automazione del Partizionamento (Auto-Partitioning)
+Per garantire che il database sia sempre pronto ad accogliere i dati del mese successivo (Business Continuity), il primo vero task del DAG è una funzione Python dedicata alla gestione proattiva delle partizioni. Utilizzando le librerie `datetime` e `dateutil`, il task calcola il mese solare successivo ed esegue dinamicamente il comando DDL su PostgreSQL, creando la partizione fisica in modo completamente automatizzato.
+
+<details>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
+
+```python
+    def crea_partizione_mese_prossimo():
+        import psycopg2
+        from datetime import date
+        from dateutil.relativedelta import relativedelta
+        
+        prossimo_mese = date.today().replace(day=1) + relativedelta(months=1)
+        mese_dopo = prossimo_mese + relativedelta(months=1)
+        
+        nome_tabella = f"staging_ais_data_{prossimo_mese.strftime('%Y_%m')}"
+        data_inizio = prossimo_mese.strftime('%Y-%m-01')
+        data_fine = mese_dopo.strftime('%Y-%m-01')
+        
+        conn = psycopg2.connect(
+            host="db_tesi", port="5432",
+            database="logistica_liguria",
+            user="admin_tesi", password="password_sicura"
+        )
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {nome_tabella} PARTITION OF staging_ais_data
+            FOR VALUES FROM ('{data_inizio}') TO ('{data_fine}');
+        """)
+        cur.close()
+        conn.close()
+        print(f"✅ Partizione {nome_tabella} verificata/creata con successo.")
+
+    auto_creazione_partizione = PythonOperator(
+        task_id='auto_creazione_partizione',
+        python_callable=crea_partizione_mese_prossimo,
+    )
+```    
+
+#### 3.2.2 Data Cleansing Automatizzato
 Come teorizzato nella progettazione logica del database, il primo step della pipeline garantisce l'affidabilità dei KPI pulendo la tabella di staging dalle anomalie prima di procedere a qualsiasi calcolo.
 * **`pulisci_coordinate_nulle`**: Rimuove i "Ghost Ping" (record con `lat` o `lon` mancanti).
 * **`deduplica_staging`**: Rimuove i messaggi identici inviati dalla stessa nave nello stesso istante, mantenendo solo il record più recente tramite il puntatore fisico `ctid`.
@@ -810,7 +850,7 @@ Come teorizzato nella progettazione logica del database, il primo step della pip
 
 </details>
 
-#### 3.2.2 Gestione delle Dimensioni (Parallel Processing)
+#### 3.2.3 Gestione delle Dimensioni (Parallel Processing)
 Nei flussi in tempo reale (come lo streaming AIS), capita frequentemente che un evento (Fatto) faccia riferimento a un'entità (Dimensione) non ancora registrata a sistema, generando il problema delle *"Late Arriving Dimensions"*. 
 Per evitare violazioni dei vincoli di chiave esterna (Foreign Key), la pipeline estrae proattivamente le nuove anagrafiche dalla tabella di staging e le inserisce nelle dimensioni `dim_navi` e `dim_terminal`. 
 
@@ -851,7 +891,7 @@ Per ottimizzare i tempi di elaborazione del micro-batch, i due task vengono **es
 
 </details>
 
-#### 3.2.3 Elaborazione dei Tempi di Permanenza (Arrivi e Partenze)
+#### 3.2.4 Elaborazione dei Tempi di Permanenza (Arrivi e Partenze)
 Una volta garantita l'integrità referenziale per le dimensioni nave e terminal, gli ultimi due task calcolano in modo incrementale gli eventi logistici. Invece di ricalcolare tutto lo storico, il sistema gestisce arrivi e partenze separatamente:
 * **Arrivi (Task 4):** Identifica il primo segnale di ingresso nel terminal e crea il record. L'idempotenza è garantita dalla clausola `ON CONFLICT DO NOTHING` (basata sul vincolo di unicità), che impedisce la duplicazione se il DAG rielabora lo stesso dato.
 * **Partenze (Task 5):** Aggiorna i record "aperti" (con partenza `NULL`). Intercetta l'ultimo orario utile in cui la nave era nel terminal prima di trasmettere un nuovo segnale in mare aperto (`ALTRO_LIGURIA`), chiudendo così il calcolo della sosta.
@@ -911,7 +951,7 @@ Una volta garantita l'integrità referenziale per le dimensioni nave e terminal,
 
 </details>
 
-#### 3.2.4 Ottimizzazione per Business Intelligence (Aggiornamento Viste Materializzate)
+#### 3.2.5 Ottimizzazione per Business Intelligence (Aggiornamento Viste Materializzate)
 L'ultimo step del micro-batch è dedicato all'aggiornamento dei dati per Power BI. Poiché le Viste Materializzate sono "statiche", è compito di Airflow forzarne l'aggiornamento (`REFRESH`) non appena il calcolo dei nuovi movimenti (Arrivi e Partenze) è terminato. Questo garantisce che la dashboard mostri sempre dati allineati in tempo reale, senza mai eseguire calcoli complessi lato BI.
 
 <details>
