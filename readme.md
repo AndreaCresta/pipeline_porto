@@ -994,11 +994,4 @@ Questa configurazione garantisce che il caricamento della Fact Table avvenga *es
 <sub> *Figura 2: Grafico di esecuzione del DAG in Airflow: dipendenze topologiche e parallelismo dei task.* </sub>
 
 ## Fase 4: Data Visualization & Business Intelligence (Power BI)
-
-## Fasi Successive del Progetto
-
-* [x] **Fase 1: Data Ingestion e Setup Infrastrutturale**
-* [x] **Fase 2: Processing & Data Modeling**
-* [x] **Fase 3: Orchestrazione e Automazione (Apache Airflow)**
-* [ ] **Fase 4: Data Visualization & Business Intelligence (Power BI)**
-  * *Pianificato:* Connessione in Import/DirectQuery tra Power BI e le viste materializzate in PostgreSQL per lo sviluppo di una dashboard direzionale, focalizzata sul monitoraggio visivo dei KPI logistici (tempi di ciclo) e degli allarmi di Overstay nei principali terminal di Genova e Vado.
+* *Pianificato:* Connessione in Import/DirectQuery tra Power BI e le viste materializzate in PostgreSQL per lo sviluppo di una dashboard direzionale, focalizzata sul monitoraggio visivo dei KPI logistici (tempi di ciclo) e degli allarmi di Overstay nei principali terminal di Genova e Vado.
