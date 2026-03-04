@@ -144,13 +144,15 @@ FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-MM-01' + INTERVAL '1 month');
 ### 1.3 Architettura di Data Ingestion: Pattern Producer-Consumer
 Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **asincrona con coda in memoria (Buffering)** basata su `asyncio`.
 
-Il flusso è diviso in due worker indipendenti:
+Il flusso è stato progettato attorno a tre componenti logici principali:
 1. **Producer (Ricevitore API):** Ascolta il websocket in tempo reale. Appena riceve un JSON, lo decodifica, applica la logica di *Geofencing* per identificare il terminal e inserisce la tupla pulita in una `asyncio.Queue()`.
-2. **Consumer (Scrittore DB):** Monitora la coda. Invece di eseguire una singola `INSERT` per ogni nave (che saturerebbe la rete), estrae fino a 100 record alla volta e li scrive nel database con una singola istruzione di **Batch Insert** (`execute_values` di `psycopg2`).
+2. **Consumer (Scrittore DB):** Monitora la coda. Invece di eseguire una singola `INSERT` per ogni nave, estrae fino a 100 record alla volta e li scrive nel database con una singola istruzione di **Batch Insert** (`execute_values` di `psycopg2`).
+3. **Supervisor (Fault Tolerance):** Un meccanismo di controllo silente (`try-except` asincrono) che avvolge il sistema. Funge da "guardiano": se il server dell'API AIS cade o la rete del server si disconnette, il Supervisor blocca il crash dell'applicazione, attende 5 secondi e innesca una riconnessione automatica infinita, garantendo un sistema resiliente e un monitoraggio 24/7.
 
 **Vantaggi ottenuti:**
 * **Resilienza (Buffering):** Se il database rallenta, i dati si accumulano temporaneamente nella coda in RAM senza essere persi (il websocket non deve "aspettare").
 * **Performance:** La scrittura a blocchi abbatte drasticamente il carico su PostgreSQL, permettendo di ingerire migliaia di segnali al secondo.
+* **Fault Tolerance (Resilienza di Rete):** Il ricevitore websocket è avvolto in un ciclo di controllo (`try-except`). Se l'API AIS si disconnette o la rete cade, lo script intercetta l'eccezione, attende 5 secondi e tenta una riconnessione automatica infinita. Questo evita crash fatali e garantisce un uptime del sistema 24/7.
 
 #### 1.3.1 Elaborazione in Volo (In-Flight Processing)
 Oltre al pattern Producer-Consumer, lo script esegue le seguenti operazioni in tempo reale durante l'ingestion:
@@ -161,6 +163,7 @@ Oltre al pattern Producer-Consumer, lo script esegue le seguenti operazioni in t
 4. **Caricamento Sicuro:** Scrive i record utilizzando query SQL parametrizzate (`execute_values`) per prevenire vulnerabilità di SQL injection e ottimizzare le risorse di rete.
 
 #### 1.3.2 Pipeline ETL in Python
+Di seguito è riportata l'implementazione completa del processo appena descritto. Oltre a orchestrare i due worker in parallelo, il codice integra un meccanismo di **Fault Tolerance (Auto-Riconnessione)**: qualora il server dell'API esterna dovesse interrompere la trasmissione per instabilità di rete, lo script non va in crash, ma esegue tentativi di connessione ciclici ogni 5 secondi. Questo garantisce un monitoraggio ininterrotto (24/7) senza alcun intervento manuale.
 
 <details>
   <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
