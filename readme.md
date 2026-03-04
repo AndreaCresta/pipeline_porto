@@ -8,7 +8,7 @@ Questo repository contiene l'infrastruttura, il codice sorgente e la documentazi
 * **ETL & Scripting:** Python 3.12 (psycopg2, websockets, asyncio)
 * **Amministrazione DB:** pgAdmin 4
 * **Automazione/Orchestrazione:** Apache Airflow 2.8.1
-* **Data Visualization & BI:** Microsoft Power BI
+* **Data Visualization & BI:** Metabase
 
 
 ## Struttura del Progetto
@@ -452,7 +452,7 @@ ON CONFLICT (mmsi, orario_arrivo) DO NOTHING;
 </details>
 
 ## 2.3 Logica di Business e viste materializzate
-Per garantire che le dashboard di Power BI si carichino istantaneamente senza sovraccaricare il database con calcoli complessi on-the-fly, la logica di business non è basata su query dirette o viste standard, ma su **Viste Materializzate (Materialized Views)**. Questa scelta architetturale permette a PostgreSQL di pre-calcolare i KPI logistici e salvarli fisicamente su disco. Power BI leggerà solo questi "fotogrammi" pre-calcolati, riducendo i tempi di interrogazione da minuti a frazioni di secondo.
+Per garantire che le dashboard di Metabase si carichino istantaneamente senza sovraccaricare il database con calcoli complessi on-the-fly, la logica di business non è basata su query dirette o viste standard, ma su **Viste Materializzate (Materialized Views)**. Questa scelta architetturale permette a PostgreSQL di pre-calcolare i KPI logistici e salvarli fisicamente su disco. Metabase leggerà solo questi "fotogrammi" pre-calcolati, riducendo i tempi di interrogazione da minuti a frazioni di secondo.
 
 #### 2.3.1 Analisi dei Tempi di Ciclo (Turnaround Time)
 Il ciclo logistico della nave viene frammentato e calcolato in due fasi distinte per isolare le inefficienze:
@@ -960,13 +960,13 @@ Una volta garantita l'integrità referenziale per le dimensioni nave e terminal,
 </details>
 
 #### 3.2.5 Ottimizzazione per Business Intelligence (Aggiornamento Viste Materializzate)
-L'ultimo step del micro-batch è dedicato all'aggiornamento dei dati per Power BI. Poiché le Viste Materializzate sono "statiche", è compito di Airflow forzarne l'aggiornamento (`REFRESH`) non appena il calcolo dei nuovi movimenti (Arrivi e Partenze) è terminato. Questo garantisce che la dashboard mostri sempre dati allineati in tempo reale, senza mai eseguire calcoli complessi lato BI.
+L'ultimo step del micro-batch è dedicato all'aggiornamento dei dati per Metabase. Poiché le Viste Materializzate sono "statiche", è compito di Airflow forzarne l'aggiornamento (`REFRESH`) non appena il calcolo dei nuovi movimenti (Arrivi e Partenze) è terminato. Questo garantisce che la dashboard mostri sempre dati allineati in tempo reale, senza mai eseguire calcoli complessi lato BI.
 
 <details>
   <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```python
-    # TASK 6: Aggiorna i KPI per Power BI (Refresh Viste Materializzate)
+    # TASK 6: Aggiorna i KPI per Metabase (Refresh Viste Materializzate)
     aggiorna_kpi_bi = SQLExecuteQueryOperator(
         task_id='aggiorna_kpi_bi',
         conn_id='connessione_db_tesi', 
@@ -993,5 +993,5 @@ Questa configurazione garantisce che il caricamento della Fact Table avvenga *es
 
 <sub> *Figura 2: Grafico di esecuzione del DAG in Airflow: dipendenze topologiche e parallelismo dei task.* </sub>
 
-## Fase 4: Data Visualization & Business Intelligence (Power BI)
-* *Pianificato:* Connessione in Import/DirectQuery tra Power BI e le viste materializzate in PostgreSQL per lo sviluppo di una dashboard direzionale, focalizzata sul monitoraggio visivo dei KPI logistici (tempi di ciclo) e degli allarmi di Overstay nei principali terminal di Genova e Vado.
+## Fase 4: Data Visualization & Business Intelligence (Metabase)
+* *Pianificato:* Connessione in Import/DirectQuery tra Metabase e le viste materializzate in PostgreSQL per lo sviluppo di una dashboard direzionale, focalizzata sul monitoraggio visivo dei KPI logistici (tempi di ciclo) e degli allarmi di Overstay nei principali terminal di Genova e Vado.
