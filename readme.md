@@ -139,7 +139,7 @@ FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-MM-01' + INTERVAL '1 month');
 
 ```
 
-#### 1.3 Architettura di Data Ingestion: Pattern Producer-Consumer
+### 1.3 Architettura di Data Ingestion: Pattern Producer-Consumer
 Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **asincrona con coda in memoria (Buffering)** basata su `asyncio`.
 
 Il flusso è diviso in due worker indipendenti:
@@ -291,11 +291,11 @@ if __name__ == "__main__":
 </details>
 ---
 
-#### Fase 2: Processing & Data Modeling
+## Fase 2: Processing, Data Modeling e KPI
 
 L'obiettivo di questa fase è la trasformazione del dato "grezzo" (Raw Data) in "informazione strutturata" (Analytics-Ready Data) per rispondere ai requisiti logistici della tesi. In questa fase, il sistema evolve da una singola tabella di atterraggio a uno **Star Schema** ottimizzato per il calcolo dei KPI.
 
-### 1. Ottimizzazione e Performance (Indexing)
+### 2.1 Ottimizzazione e Performance (Indexing)
 Per garantire la scalabilità della pipeline e gestire migliaia di record AIS in tempo reale, ho implementato indici specializzati sulla tabella di staging:
 
 * **`idx_ais_timestamp`**: Indice B-Tree sulla colonna `timestamp_utc` per velocizzare le query di ordinamento temporale e il partizionamento logico dei dati.
@@ -318,14 +318,13 @@ CREATE INDEX idx_ais_mmsi_time ON staging_ais_data (mmsi, timestamp_utc DESC);
 
 </details>
 
-### 2. Architettura Star Schema (Data Warehouse Design)
+### 2.2 Architettura Star Schema (Data Warehouse Design)
 
 Per trasformare il flusso continuo di dati AIS in metriche logistiche interrogabili, il processo di Data Engineering è stato strutturato attorno a un modello a stella (Star Schema). Questo approccio garantisce l'integrità del dato, elimina le ridondanze e ottimizza le performance del database per le analisi logistico-portuali.
-
-#### 2.1 Le Tabelle del Modello
 L'architettura separa rigorosamente i fatti (eventi dinamici) dalle dimensioni (anagrafiche e dati di contesto):
 
-* **Tabelle Dimensione (Anagrafiche):**
+#### 2.2.1 Tabelle Dimensione (Anagrafiche)
+
   * **`dim_navi`**: Memorizza i dati statici delle navi, come il codice MMSI e il nome (Ship Name). Risolve il problema della ridondanza presente nello staging, dove il nome della nave viene inutilmente ripetuto per ogni singola coordinata inviata.
 
 <details>
@@ -404,7 +403,8 @@ ON CONFLICT (data_id) DO NOTHING;
 
 </details>
 
-* **Tabella dei Fatti (Eventi):**
+#### 2.2.2 Tabella dei Fatti (Eventi)
+
   * **`fact_movimenti`**: È il cuore del sistema analitico. Registra esclusivamente gli eventi di "Ingresso" e "Uscita" dalle aree terminal, relazionando l'ID della nave (`mmsi`), l'ID del terminal e due timestamp cruciali: `orario_arrivo` e `orario_partenza`.
 
 <details>
@@ -444,10 +444,10 @@ ON CONFLICT (mmsi, orario_arrivo) DO NOTHING;
 
 </details>
 
-### 3. Logica di Business e KPI Logistici (Ottimizzazione BI)
+## 2.3 Logica di Business e viste materializzate
 Per garantire che le dashboard di Power BI si carichino istantaneamente senza sovraccaricare il database con calcoli complessi on-the-fly, la logica di business non è basata su query dirette o viste standard, ma su **Viste Materializzate (Materialized Views)**. Questa scelta architetturale permette a PostgreSQL di pre-calcolare i KPI logistici e salvarli fisicamente su disco. Power BI leggerà solo questi "fotogrammi" pre-calcolati, riducendo i tempi di interrogazione da minuti a frazioni di secondo.
 
-#### 3.1. Analisi dei Tempi di Ciclo (Turnaround Time)
+#### 2.3.1 Analisi dei Tempi di Ciclo (Turnaround Time)
 Il ciclo logistico della nave viene frammentato e calcolato in due fasi distinte per isolare le inefficienze:
 * **Time in Rada (Waiting Time):** Misura il tempo che la nave trascorre nell'area di ancoraggio (identificata come transito o attesa nel Mar Ligure) prima di ricevere l'autorizzazione all'ormeggio. Un valore medio alto in questo KPI è il principale indicatore di congestione del terminal.
 
@@ -540,7 +540,7 @@ LEFT JOIN dim_terminal t ON m.codice_zona = t.codice_zona;
 
 </details>
 
-#### 3.2. Identificazione Anomalie e Overstay
+#### 2.3.2. Identificazione Anomalie e Overstay
 Tramite viste SQL materializzate, il sistema filtra automaticamente i dati per far emergere i casi critici (Outliers):
 * **Overstay al Molo:** Identificazione delle navi che superano le soglie standard di permanenza (es. > 72 ore al Vado Gateway), segnalando possibili guasti, ispezioni doganali o inefficienze nelle operazioni di piazzale.
 
@@ -585,7 +585,7 @@ GROUP BY terminal;
 
 </details>
 
-#### 3.3. Data Cleansing e Integrità
+#### 2.3.3 Data Cleansing e Integrità
 Per garantire l'affidabilità dei KPI, sono state automatizzate procedure di pulizia del dato a livello di database:
 * Rimozione dei "rimbalzi GPS" (Ghost Ping) e delle coordinate outlier generate da errori di trasmissione dell'antenna AIS.
 * Deduplicazione tecnica degli eventi per assicurare che ogni scalo nave generi un singolo record fattuale nella tabella `fact_movimenti`.
@@ -612,11 +612,8 @@ WHERE a.ctid < b.ctid
 
 </details>
 
-### 3.4 Monitoraggio Real-Time: Navi Presenti in Porto
+#### 2.3.4 Monitoraggio Real-Time: Navi Presenti in Porto
 Per rispondere alle esigenze operative dei terminalisti (es. *Quali navi sono ormeggiate in questo istante?*), il sistema espone una vista dinamica che identifica le unità navali attualmente in banchina. 
-
-#### Filtro di Recency e Gestione Segnale Intermittente
-A differenza delle analisi storiche, il monitoraggio in tempo reale deve gestire il problema dei "dati orfani" (navi che escono dall'area di copertura senza inviare il segnale di partenza). Per garantire l'accuratezza del dato, è stato implementato un **Filtro di Recency a 24 ore**: se una nave non trasmette posizioni da oltre un giorno, viene automaticamente esclusa dal monitoraggio live per evitare "falsi positivi" nella dashboard causati da perdite intermittenti del segnale AIS.
 
 <details>
   <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
@@ -641,6 +638,9 @@ WHERE f.orario_partenza IS NULL                       -- Solo movimenti non anco
 ```
 
 </details>
+
+#### 2.3.5 Filtro di Recency e Gestione Segnale Intermittente
+A differenza delle analisi storiche, il monitoraggio in tempo reale deve gestire il problema dei "dati orfani" (navi che escono dall'area di copertura senza inviare il segnale di partenza). Per garantire l'accuratezza del dato, è stato implementato un **Filtro di Recency a 24 ore**: se una nave non trasmette posizioni da oltre un giorno, viene automaticamente esclusa dal monitoraggio live per evitare "falsi positivi" nella dashboard causati da perdite intermittenti del segnale AIS.
 
 ## Fase 3: Orchestrazione e Automazione (Apache Airflow)
 
@@ -851,7 +851,7 @@ Per ottimizzare i tempi di elaborazione del micro-batch, i due task vengono **es
 
 </details>
 
-#### 3.2.3 Elaborazione dei Tempi di Permanenza (Fact Table)
+#### 3.2.3 Elaborazione dei Tempi di Permanenza (Arrivi e Partenze)
 Una volta garantita l'integrità referenziale per le dimensioni nave e terminal, gli ultimi due task calcolano in modo incrementale gli eventi logistici. Invece di ricalcolare tutto lo storico, il sistema gestisce arrivi e partenze separatamente:
 * **Arrivi (Task 4):** Identifica il primo segnale di ingresso nel terminal e crea il record. L'idempotenza è garantita dalla clausola `ON CONFLICT DO NOTHING` (basata sul vincolo di unicità), che impedisce la duplicazione se il DAG rielabora lo stesso dato.
 * **Partenze (Task 5):** Aggiorna i record "aperti" (con partenza `NULL`). Intercetta l'ultimo orario utile in cui la nave era nel terminal prima di trasmettere un nuovo segnale in mare aperto (`ALTRO_LIGURIA`), chiudendo così il calcolo della sosta.
@@ -911,7 +911,7 @@ Una volta garantita l'integrità referenziale per le dimensioni nave e terminal,
 
 </details>
 
-#### 3.2.4 Ottimizzazione per Business Intelligence (Task 6)
+#### 3.2.4 Ottimizzazione per Business Intelligence (Aggiornamento Viste Materializzate)
 L'ultimo step del micro-batch è dedicato all'aggiornamento dei dati per Power BI. Poiché le Viste Materializzate sono "statiche", è compito di Airflow forzarne l'aggiornamento (`REFRESH`) non appena il calcolo dei nuovi movimenti (Arrivi e Partenze) è terminato. Questo garantisce che la dashboard mostri sempre dati allineati in tempo reale, senza mai eseguire calcoli complessi lato BI.
 
 <details>
@@ -944,6 +944,8 @@ Questa configurazione garantisce che il caricamento della Fact Table avvenga *es
 <img width="985" height="244" alt="airflow_automazioen" src="https://github.com/user-attachments/assets/9e6dde75-9f7b-4105-b3c3-7a081c0dbcf2" />
 
 ---
+
+## Fase 4: Data Visualization & Business Intelligence (Power BI)
 
 ## Fasi Successive del Progetto
 
