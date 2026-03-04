@@ -991,7 +991,7 @@ Questa configurazione garantisce che il caricamento della Fact Table avvenga *es
 
 <img width="1597" height="247" alt="airflow_automazione" src="https://github.com/user-attachments/assets/03722422-8b1f-4fed-bf94-5eaefca4a002" />
 
-<sub> *Figura 2: Grafo di esecuzione del DAG in Airflow: dipendenze topologiche e parallelismo dei task.* </sub>
+<sub> *Figura 2: Grafico di esecuzione del DAG in Airflow: dipendenze topologiche e parallelismo dei task.* </sub>
 
 ## Fase 4: Data Visualization & Business Intelligence (Power BI)
 
