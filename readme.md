@@ -288,9 +288,10 @@ if __name__ == "__main__":
         print("\n🛑 Monitoraggio interrotto manualmente.")
 ```
 
+</details>
+
 <img width="852" height="531" alt="stagin_ais_data" src="https://github.com/user-attachments/assets/cf8d9bea-1053-4320-bd86-763b4aab22e6" />
 
-</details>
 
 ## Fase 2: Processing, Data Modeling e KPI
 
