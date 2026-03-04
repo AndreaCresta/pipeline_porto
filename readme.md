@@ -295,6 +295,8 @@ if __name__ == "__main__":
 
 <img width="852" height="531" alt="stagin_ais_data" src="https://github.com/user-attachments/assets/cf8d9bea-1053-4320-bd86-763b4aab22e6" />
 
+*Figura 1: Dettaglio della tabella di atterraggio (Staging) su pgAdmin. L'immagine mostra il flusso di dati grezzi appena ingeriti dallo script Python, con l'etichetta del terminal di appartenenza assegnata in tempo reale dalla logica di Geofencing, prima che il motore di PostgreSQL li smisti fisicamente nelle rispettive partizioni mensili.*
+
 
 ## Fase 2: Processing, Data Modeling e KPI
 
