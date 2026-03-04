@@ -814,6 +814,7 @@ Per garantire che il database sia sempre pronto ad accogliere i dati del mese su
         python_callable=crea_partizione_mese_prossimo,
     )
 ```    
+</details>
 
 #### 3.2.2 Data Cleansing Automatizzato
 Come teorizzato nella progettazione logica del database, il primo step della pipeline garantisce l'affidabilità dei KPI pulendo la tabella di staging dalle anomalie prima di procedere a qualsiasi calcolo.
