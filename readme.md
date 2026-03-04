@@ -10,7 +10,6 @@ Questo repository contiene l'infrastruttura, il codice sorgente e la documentazi
 * **Automazione/Orchestrazione:** Apache Airflow 2.8.1
 * **Data Visualization & BI:** Microsoft Power BI
 
----
 
 ## Struttura del Progetto
 ```text
@@ -47,8 +46,7 @@ Per replicare l'ambiente di sviluppo in locale, seguire questi passaggi:
    ```bash
    python3 ingestion_pipeline.py
    ```
-
----
+   
 
 ## Fase 1: Data Ingestion e Setup Infrastrutturale
 
@@ -289,7 +287,6 @@ if __name__ == "__main__":
 <img width="852" height="531" alt="stagin_ais_data" src="https://github.com/user-attachments/assets/cf8d9bea-1053-4320-bd86-763b4aab22e6" />
 
 </details>
----
 
 ## Fase 2: Processing, Data Modeling e KPI
 
@@ -981,9 +978,8 @@ auto_creazione_partizione >> pulisci_coordinate_nulle >> deduplica_staging >> [a
 
 Questa configurazione garantisce che il caricamento della Fact Table avvenga *esclusivamente* se la fase di Data Cleansing e il censimento parallelo delle dimensioni si sono conclusi con successo, preservando l'assoluta coerenza strutturale del Data Warehouse.
 
-<img width="985" height="244" alt="airflow_automazioen" src="https://github.com/user-attachments/assets/9e6dde75-9f7b-4105-b3c3-7a081c0dbcf2" />
+<img width="1597" height="247" alt="airflow_automazione" src="https://github.com/user-attachments/assets/03722422-8b1f-4fed-bf94-5eaefca4a002" />
 
----
 
 ## Fase 4: Data Visualization & Business Intelligence (Power BI)
 
