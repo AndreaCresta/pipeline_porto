@@ -54,7 +54,7 @@ Per replicare l'ambiente di sviluppo in locale, seguire questi passaggi:
 
 In questa prima fase ho progettato e implementato l'intera pipeline di acquisizione dati (Ingestion), partendo dall'infrastruttura fino alla scrittura in database.
 
-### 1. Infrastruttura Containerizzata
+### 1.1 Infrastruttura Containerizzata
 Ho scelto di containerizzare l'ambiente di database tramite Docker per garantire la totale riproducibilità del sistema, isolandolo dal sistema operativo host. Ho sviluppato il seguente `docker-compose.yml`:
 
 <details>
@@ -94,10 +94,10 @@ volumes:
 
 *Nota tecnica:* Ho adottato PostgreSQL 18 per sfruttare le recenti performance di I/O asincrono. Il volume è mappato su `/var/lib/postgresql/data`, path standard per la persistenza dei dati in PostgreSQL.
 
-### 2. Data Definition Language (DDL)
+### 1.2 Data Definition Language (DDL)
 Per garantire prestazioni elevate e scalabilità su miliardi di righe, ho adottato un'architettura basata sul **Table Partitioning** nativo di PostgreSQL. Questo approccio permette al database di eseguire il Partition Pruning, leggendo esclusivamente i "cassetti" temporali rilevanti e ignorando il resto dello storico, riducendo i tempi di query da minuti a frazioni di secondo.
 
-#### 2.1 Tabella di staging e Geofencing
+#### 1.2.1 Tabella di staging e Geofencing
 La tabella di atterraggio accoglie i dati grezzi in tempo reale. Le coordinate sono tipizzate con DECIMAL(9,6) per ottenere una tolleranza spaziale di circa 11 cm, fondamentale per le logiche di precisione sui moli.
 
 <details>
@@ -127,7 +127,7 @@ CREATE TABLE staging_ais_data_default PARTITION OF staging_ais_data DEFAULT;
 ```
 </details>
 
-## 2.2 Architettura Dati: Table Partitioning (PostgreSQL)
+#### 1.2.2 Architettura Dati: Table Partitioning (PostgreSQL)
 I dati vengono smistati automaticamente in partizioni mensili fisicamente separate (es. `staging_ais_data_2026_03`, `staging_ais_data_2026_04`) tramite `PARTITION BY RANGE (timestamp_utc)`. Questo permette al motore di eseguire la *Partition Pruning*, leggendo esclusivamente i "cassetti" temporali rilevanti e riducendo i tempi di query da minuti a frazioni di secondo.
 
 Per garantire la **Business Continuity** senza interventi manuali, la pipeline include un task dedicato in Airflow che calcola dinamicamente il primo giorno del mese entrante ed esegue `CREATE TABLE IF NOT EXISTS` per creare in anticipo la partizione del mese successivo, prevenendo errori di tipo *Out of Range*.
@@ -139,7 +139,7 @@ FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-MM-01' + INTERVAL '1 month');
 
 ```
 
-## Architettura di Data Ingestion: Pattern Producer-Consumer
+#### 1.3 Architettura di Data Ingestion: Pattern Producer-Consumer
 Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **asincrona con coda in memoria (Buffering)** basata su `asyncio`.
 
 Il flusso è diviso in due worker indipendenti:
@@ -150,7 +150,7 @@ Il flusso è diviso in due worker indipendenti:
 * **Resilienza (Buffering):** Se il database rallenta, i dati si accumulano temporaneamente nella coda in RAM senza essere persi (il websocket non deve "aspettare").
 * **Performance:** La scrittura a blocchi abbatte drasticamente il carico su PostgreSQL, permettendo di ingerire migliaia di segnali al secondo.
 
-### Elaborazione in Volo (In-Flight Processing)
+#### 1.3.1 Elaborazione in Volo (In-Flight Processing)
 Oltre al pattern Producer-Consumer, lo script esegue le seguenti operazioni in tempo reale durante l'ingestion:
 
 1. **Estrazione e Filtraggio:** Richiede solo i messaggi di tipo "PositionReport" all'interno di specifiche Bounding Boxes (Genova e Vado Ligure).
@@ -158,7 +158,7 @@ Oltre al pattern Producer-Consumer, lo script esegue le seguenti operazioni in t
 3. **Data Cleansing:** Intercetta e normalizza i timestamp. Il codice tronca i nanosecondi forniti dall'API (`.split('.')[0]`) per renderli compatibili con lo standard ISO richiesto da PostgreSQL.
 4. **Caricamento Sicuro:** Scrive i record utilizzando query SQL parametrizzate (`execute_values`) per prevenire vulnerabilità di SQL injection e ottimizzare le risorse di rete.
 
-### 3. Pipeline ETL in Python
+#### 1.3.2 Pipeline ETL in Python
 
 <details>
   <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
@@ -291,7 +291,7 @@ if __name__ == "__main__":
 </details>
 ---
 
-## Processing & Data Modeling
+#### Fase 2: Processing & Data Modeling
 
 L'obiettivo di questa fase è la trasformazione del dato "grezzo" (Raw Data) in "informazione strutturata" (Analytics-Ready Data) per rispondere ai requisiti logistici della tesi. In questa fase, il sistema evolve da una singola tabella di atterraggio a uno **Star Schema** ottimizzato per il calcolo dei KPI.
 
