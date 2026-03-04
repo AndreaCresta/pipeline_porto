@@ -295,7 +295,7 @@ if __name__ == "__main__":
 
 <img width="852" height="531" alt="stagin_ais_data" src="https://github.com/user-attachments/assets/cf8d9bea-1053-4320-bd86-763b4aab22e6" />
 
-*Figura 1: Vista unificata della tabella di staging. I dati mostrati sono georeferenziati in tempo reale e già fisicamente partizionati.*
+<sub> *Figura 1: Vista unificata della tabella di staging. I dati mostrati sono georeferenziati in tempo reale e già fisicamente partizionati.* </sub>
 
 
 ## Fase 2: Processing, Data Modeling e KPI
