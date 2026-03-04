@@ -130,12 +130,16 @@ I dati vengono smistati automaticamente in partizioni mensili fisicamente separa
 
 Per garantire la **Business Continuity** senza interventi manuali, la pipeline include un task dedicato in Airflow che calcola dinamicamente il primo giorno del mese entrante ed esegue `CREATE TABLE IF NOT EXISTS` per creare in anticipo la partizione del mese successivo, prevenendo errori di tipo *Out of Range*.
 
+<details>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
+
 ```sql
 -- Esempio di comando DDL eseguito dinamicamente da Airflow:
 CREATE TABLE IF NOT EXISTS staging_ais_data_YYYY_MM PARTITION OF staging_ais_data
 FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-MM-01' + INTERVAL '1 month');
 
 ```
+</details>
 
 ### 1.3 Architettura di Data Ingestion: Pattern Producer-Consumer
 Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **asincrona con coda in memoria (Buffering)** basata su `asyncio`.
