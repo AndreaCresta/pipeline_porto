@@ -128,3 +128,18 @@ SELECT
 FROM fact_movimenti m
 LEFT JOIN dim_navi n ON m.mmsi = n.mmsi
 WHERE m.codice_zona = 'ALTRO_LIGURIA';
+
+-- 5. Vista Materializzata: Confronto Terminal
+-- Questa vista aggrega i dati per ogni terminal per permettere la comparazione dei tempi
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_kpi_confronto_terminal AS
+SELECT 
+    m.codice_zona AS terminal,
+    COUNT(DISTINCT m.mmsi) AS totale_navi,
+    AVG(EXTRACT(EPOCH FROM (m.orario_partenza - m.orario_arrivo))/3600) AS media_permanenza_ore
+FROM fact_movimenti m
+WHERE m.orario_partenza IS NOT NULL 
+  AND m.codice_zona != 'ALTRO_LIGURIA'
+GROUP BY 1;
+
+-- Indice opzionale per velocizzare i refresh futuri
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_confronto_terminal ON mv_kpi_confronto_terminal (terminal);

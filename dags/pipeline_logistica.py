@@ -1,12 +1,11 @@
 from airflow import DAG
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, date
 from airflow.operators.python import PythonOperator
 
 default_args = {
     'owner': 'andrea',
-    'depends_on_past': False,
-    'start_date': datetime(2023, 1, 1),
+    'start_date': datetime(2023, 1, 1, tzinfo=timezone.utc),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
@@ -19,39 +18,51 @@ with DAG(
     tags=['logistica', 'tesi'],
 ) as dag:
 
-    def crea_partizione_mese_prossimo():
+    def gestione_partizioni():
         import psycopg2
         from datetime import date
         from dateutil.relativedelta import relativedelta
         
-        prossimo_mese = date.today().replace(day=1) + relativedelta(months=1)
-        mese_dopo = prossimo_mese + relativedelta(months=1)
+        # Gestiamo due mesi: Corrente e Prossimo
+        mesi_da_controllare = [
+            date.today().replace(day=1), # Mese corrente (Marzo)
+            date.today().replace(day=1) + relativedelta(months=1) # Mese prossimo (Aprile)
+        ]
         
-        nome_tabella = f"staging_ais_data_{prossimo_mese.strftime('%Y_%m')}"
-        data_inizio = prossimo_mese.strftime('%Y-%m-01')
-        data_fine = mese_dopo.strftime('%Y-%m-01')
-        
+        # Connessione usando il nome del servizio docker 'postgres_porto'
         conn = psycopg2.connect(
-            host="db_tesi", port="5432",
+            host="postgres_porto", 
+            port="5432",
             database="logistica_liguria",
-            user="admin_tesi", password="password_sicura"
+            user="admin_tesi", 
+            password="password_sicura"
         )
         conn.autocommit = True
         cur = conn.cursor()
-        cur.execute(f"""
-            CREATE TABLE IF NOT EXISTS {nome_tabella} PARTITION OF staging_ais_data
-            FOR VALUES FROM ('{data_inizio}') TO ('{data_fine}');
-        """)
+        
+        for mese in mesi_da_controllare:
+            mese_successivo = mese + relativedelta(months=1)
+            nome_tabella = f"staging_ais_data_y{mese.strftime('%Y')}_m{mese.strftime('%m')}"
+            data_inizio = mese.strftime('%Y-%m-01')
+            data_fine = mese_successivo.strftime('%Y-%m-01')
+            
+            query = f"""
+                CREATE TABLE IF NOT EXISTS {nome_tabella} PARTITION OF staging_ais_data
+                FOR VALUES FROM ('{data_inizio}') TO ('{data_fine}');
+            """
+            cur.execute(query)
+            print(f"✅ Verifica partizione: {nome_tabella} ({data_inizio} -> {data_fine})")
+            
         cur.close()
         conn.close()
-        print(f"✅ Partizione {nome_tabella} verificata/creata con successo.")
 
+    # Task 0: Assicura che le tabelle esistano PRIMA di pulirle
     auto_creazione_partizione = PythonOperator(
         task_id='auto_creazione_partizione',
-        python_callable=crea_partizione_mese_prossimo,
+        python_callable=gestione_partizioni,
     )
 
-    # TASK 1: Pulizia (corretto per essere più robusto)
+    # TASK 1: Pulizia
     pulisci_coordinate_nulle = SQLExecuteQueryOperator(
         task_id='pulisci_coordinate_nulle',
         conn_id='connessione_db_tesi', 
@@ -85,7 +96,7 @@ with DAG(
         """
     )
 
-    # TASK 3B: Aggiorna Terminal
+    # TASK 3B: Aggiorna Terminal (Corretto con nome_esteso)
     aggiorna_dim_terminal = SQLExecuteQueryOperator(
         task_id='aggiorna_dim_terminal',
         conn_id='connessione_db_tesi', 
@@ -120,7 +131,7 @@ with DAG(
         """
     )
 
-    # TASK 5: Calcola le partenze (Evitando incroci col passato)
+    # TASK 5: Calcola le partenze
     aggiorna_partenze = SQLExecuteQueryOperator(
         task_id='aggiorna_partenze',
         conn_id='connessione_db_tesi', 
@@ -142,19 +153,18 @@ with DAG(
         WHERE f.mmsi = sub.mmsi 
           AND f.codice_zona = sub.terminal_zona 
           AND f.orario_partenza IS NULL
-          AND sub.ultima_visto > f.orario_arrivo; -- <-- LA MAGIA È QUI: La partenza deve essere successiva all'arrivo!
+          AND sub.ultima_visto > f.orario_arrivo;
         """
     )
 
-    # TASK 6: Aggiorna i KPI per Power BI (Refresh Viste Materializzate)
+    # TASK 6: Refresh Viste
     aggiorna_kpi_bi = SQLExecuteQueryOperator(
         task_id='aggiorna_kpi_bi',
         conn_id='connessione_db_tesi', 
         sql="""
-        REFRESH MATERIALIZED VIEW mv_kpi_tempi_porto;
         REFRESH MATERIALIZED VIEW mv_kpi_confronto_terminal;
         """
     )
 
-    # Esecuzione logica
+    # Workflow
     auto_creazione_partizione >> pulisci_coordinate_nulle >> deduplica_staging >> [aggiorna_dim_navi, aggiorna_dim_terminal] >> aggiorna_fact_movimenti >> aggiorna_partenze >> aggiorna_kpi_bi

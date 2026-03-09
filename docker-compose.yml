@@ -41,6 +41,24 @@ services:
     networks:
       - tesi_network
 
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase_tesi
+    ports:
+      - "3000:3000"
+    environment:
+      # Metabase usa il DB di appoggio appena creato
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase_db # <--- Nome aggiornato
+      MB_DB_PORT: 5432
+      MB_DB_USER: admin_tesi
+      MB_DB_PASS: password_sicura
+      MB_DB_HOST: db_tesi
+    networks:
+      - tesi_network
+    depends_on:
+      - db_tesi
+
   airflow-init:
     <<: *airflow-common
     container_name: airflow_init

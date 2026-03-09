@@ -2,8 +2,10 @@ import asyncio
 import websockets
 import json
 import psycopg2
+import ssl
+import certifi
 from psycopg2 import Error
-from psycopg2.extras import execute_values # Ottimizzato per inserimenti multipli
+from psycopg2.extras import execute_values 
 
 # --- 1. CONFIGURAZIONE DATABASE E CODA ---
 DB_HOST = "localhost"
@@ -12,13 +14,13 @@ DB_NAME = "logistica_liguria"
 DB_USER = "admin_tesi"
 DB_PASS = "password_sicura"
 
-BATCH_SIZE = 100  # Numero di navi da salvare in un colpo solo
-QUEUE = asyncio.Queue() # La "Coda" di parcheggio in memoria
+BATCH_SIZE = 100  
+QUEUE = asyncio.Queue() 
 
 # --- 2. LOGICA DI BUSINESS (Geofencing) ---
 def identifica_terminal(lat, lon):
-    if 44.420 <= lat <= 44.435 and 8.740 <= lon <= 8.785:
-        return "GENOVA_VOLTRI"
+    if 44.410 <= lat <= 44.435 and 8.740 <= lon <= 8.800:
+        return 'GENOVA_VOLTRI'
     elif 44.260 <= lat <= 44.285 and 8.430 <= lon <= 8.460:
         return "VADO_GATEWAY"
     elif 44.395 <= lat <= 44.415 and 8.870 <= lon <= 8.910:
@@ -27,7 +29,8 @@ def identifica_terminal(lat, lon):
 
 # --- 3A. Lavoratore A (RICEVITORE: API -> CODA) ---
 async def websocket_listener():
-    api_key = "b7f29d875e4c6ccd444fd2c0e1d22a2a0ef57f9a"
+    # Usiamo la tua API KEY valida
+    api_key = "e54f403f88919f11189fe244adbf1f2fc96993d8"
     url = "wss://stream.aisstream.io/v0/stream"
 
     subscribe_message = {
@@ -39,82 +42,96 @@ async def websocket_listener():
         "FilterMessageTypes": ["PositionReport"]
     }
 
-    # Aggiungiamo un loop infinito per l'auto-riconnessione
+    # CONFIGURAZIONE SSL PER MAC (Risolve il problema dell'handshake)
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
     while True:
         try:
             print("📡 Lavoratore A: Tentativo di connessione all'API AISStream...")
-            async with websockets.connect(url) as websocket:
+            
+            # Connessione con timeout esteso e SSL bypass
+            async with websockets.connect(
+                url, 
+                ssl=ssl_context, 
+                open_timeout=60, 
+                ping_interval=20, 
+                ping_timeout=20
+            ) as websocket:
+                
                 await websocket.send(json.dumps(subscribe_message))
-                print("✅ Lavoratore A: Connesso all'API! Inizio a riempire la coda...\n" + "-"*50)
+                print("✅ Lavoratore A: Connesso all'API! Inizio a ricevere dati...\n" + "-"*50)
 
                 async for message in websocket:
                     data = json.loads(message)
                     
-                    mmsi = data['MetaData']['MMSI']
-                    ship_name = data['MetaData']['ShipName']
-                    lat = data['MetaData']['latitude']
-                    lon = data['MetaData']['longitude']
-                    time_utc = data['MetaData']['time_utc'].split('.')[0]
-                    zona = identifica_terminal(lat, lon)
-
-                    # Crea una tupla col dato e lo sbatte SUBITO nella coda in memoria
-                    record = (mmsi, ship_name, zona, lat, lon, time_utc)
-                    await QUEUE.put(record)
+                    # Estrazione sicura dei dati
+                    meta = data.get('MetaData', {})
+                    mmsi = meta.get('MMSI')
+                    ship_name = meta.get('ShipName', 'Sconosciuta')
+                    lat = meta.get('latitude')
+                    lon = meta.get('longitude')
+                    time_utc = meta.get('time_utc', '').split('.')[0]
+                    
+                    if mmsi and lat and lon:
+                        zona = identifica_terminal(lat, lon)
+                        record = (mmsi, ship_name, zona, lat, lon, time_utc)
+                        await QUEUE.put(record)
                     
         except Exception as e:
-            # Se la rete cade, va in timeout o il server li caccia, lo script non muore.
-            print(f"⚠️ Lavoratore A: Errore di connessione API ({e}). Riprovo tra 5 secondi...")
-            await asyncio.sleep(5) # Aspetta 5 secondi e poi il ciclo "while" riparte!
+            print(f"⚠️ Lavoratore A: Errore di connessione ({e}). Riprovo tra 10 secondi...")
+            await asyncio.sleep(10)
 
 # --- 3B. Lavoratore B (SCRITTORE: CODA -> DATABASE) ---
 async def db_writer():
+    connessione = None
     try:
-        print("🔄 Lavoratore B: Connessione al database PostgreSQL in corso...")
-        connessione = psycopg2.connect(host=DB_HOST, port=DB_PORT, database=DB_NAME, user=DB_USER, password=DB_PASS)
+        print("🔄 Lavoratore B: Connessione al database PostgreSQL...")
+        connessione = psycopg2.connect(
+            host=DB_HOST, 
+            port=DB_PORT, 
+            database=DB_NAME, 
+            user=DB_USER, 
+            password=DB_PASS
+        )
         cursore = connessione.cursor()
-        print("✅ Lavoratore B: Database connesso! Pronto a scaricare la coda.")
+        print("✅ Lavoratore B: Database connesso!")
 
         while True:
-            batch = []
-            
-            # 1. Si ferma ad aspettare che ci sia almeno un segnale nella coda
+            # Prende il primo record disponibile
             record = await QUEUE.get()
-            batch.append(record)
+            batch = [record]
             
-            # 2. Se la coda è piena, raccoglie velocemente gli altri (fino a 100)
+            # Riempie il batch se ci sono altri record pronti
             while len(batch) < BATCH_SIZE and not QUEUE.empty():
                 batch.append(QUEUE.get_nowait())
             
-            # 3. Scrive tutto il blocco nel DB con UNA SOLA operazione!
             sql_insert = """
                 INSERT INTO staging_ais_data (mmsi, ship_name, terminal_zona, lat, lon, timestamp_utc)
                 VALUES %s;
             """
-            # execute_values fa la "Batch Insert", migliaia di volte più veloce
             execute_values(cursore, sql_insert, batch)
             connessione.commit()
             
-            print(f"💾 Salvato un blocco di {len(batch)} navi in un colpo solo! (Rimaste in coda: {QUEUE.qsize()})")
+            print(f"💾 Salvato blocco di {len(batch)} navi. (In coda: {QUEUE.qsize()})")
 
     except Error as e:
         print(f"❌ Errore del Database: {e}")
     finally:
-        if 'connessione' in locals() and connessione:
-            cursore.close()
+        if connessione:
             connessione.close()
-            print("\n🔒 Connessione al database chiusa in modo sicuro.")
+            print("🔒 Connessione chiusa.")
 
-# --- 4. AVVIO DEL PROGRAMMA ---
+# --- 4. AVVIO ---
 async def main():
-    # Facciamo partire ENTRAMBI i lavoratori in parallelo (Coroutines)
-    task_ricevitore = asyncio.create_task(websocket_listener())
-    task_scrittore = asyncio.create_task(db_writer())
-    
-    # Il programma non si ferma finché non c'è un errore o uno stop manuale
-    await asyncio.gather(task_ricevitore, task_scrittore)
+    await asyncio.gather(
+        websocket_listener(),
+        db_writer()
+    )
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n🛑 Monitoraggio interrotto manualmente.")
+        print("\n🛑 Monitoraggio interrotto.")
