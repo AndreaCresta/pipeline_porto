@@ -1078,6 +1078,10 @@ Il grafico a linea (**Trend degli arrivi**) mostra l'andamento temporale del num
 
 Il grafico a ciambella (**Occupazione Live dei Terminal**) mostra la distribuzione percentuale delle navi attualmente in porto tra i tre terminal monitorati. Al momento del test: Genova Voltri **53%**, Vado Gateway **33%**, Genova Sampierdarena **13%**. Il totale di **15 navi attive** rappresenta la fotografia istantanea dello stato operativo del porto. La fonte dati è la colonna `numero_scali` aggregata per `terminal` dalla vista `mv_kpi_confronto_terminal`.
 
+<img width="1075" height="862" alt="dashboard1" src="https://github.com/user-attachments/assets/a9e74fa0-f953-4da2-be2d-f885776b4527" />
+<img width="1075" height="842" alt="dashboard2" src="https://github.com/user-attachments/assets/e54eba82-d952-4cf2-b6eb-2dd323124845" />
+
+
 ### 4.4 Sincronizzazione Near Real-Time: Architettura a 3 Livelli
 
 Il sistema è progettato per garantire un monitoraggio *quasi live* mantenendo la coerenza del database relazionale. Il flusso end-to-end si articola su tre livelli temporali sovrapposti:
