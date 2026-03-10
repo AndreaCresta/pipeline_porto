@@ -1008,8 +1008,6 @@ La creazione automatica del database avviene tramite uno script SQL (`init-db/cr
   <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
 
 ```sql
--- init-db/create_metabase_db.sql
--- Eseguito automaticamente da PostgreSQL al primo avvio del container.
 CREATE DATABASE metabase_app_db;
 GRANT ALL PRIVILEGES ON DATABASE metabase_app_db TO admin_tesi;
 ```
