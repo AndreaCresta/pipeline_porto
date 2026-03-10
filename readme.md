@@ -1097,6 +1097,7 @@ Il grafico a linee mostra l'andamento temporale degli arrivi distinto per termin
 
 Il grafico a ciambella mostra la distribuzione percentuale delle navi attualmente in porto: Genova Sampierdarena **56%**, Genova Voltri **22%**, Vado Ligure **22%**, per un totale di **18 navi attive**. Il grafico a barre (**Efficienza dei terminal**) affianca questa fotografia istantanea con la media delle ore di sosta per terminal: Genova Sampierdarena ~**2.3 ore**, Vado Gateway ~**2.1 ore**, Genova Voltri ~**1.2 ore**. La fonte dati per entrambi i pannelli è la vista `mv_kpi_confronto_terminal`.
 
+<img width="1060" height="1154" alt="dashboard_v1" src="https://github.com/user-attachments/assets/08d6f7c9-d8ca-496a-9b94-b2057d85a8fb" />
 
 ### 4.4 Sincronizzazione Near Real-Time: Architettura a 3 Livelli
 
