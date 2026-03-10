@@ -1130,7 +1130,7 @@ Durante lo sviluppo e il testing della pipeline end-to-end sono state identifica
 * **Filtraggio Navi di Servizio Portuale (MMSI Blacklist):** L'analisi dei dati raccolti ha evidenziato la presenza sistematica di navi di servizio portuale (rimorchiatori, draghe, navi antinquinamento, battelli passeggeri locali) all'interno delle bounding box dei terminal, specialmente a Genova Voltri e Sampierdarena. Queste navi, pur essendo fisicamente presenti nell'area, non rappresentano traffico commerciale rilevante per i KPI logistici. Il problema è stato risolto costruendo una **lista nera di 22 MMSI** identificati manualmente tramite MarineTraffic e verificati uno per uno per tipo di nave. Il filtro viene applicato nel Lavoratore A prima che il record entri in coda, garantendo che il database contenga esclusivamente navi cargo, container e bulk carrier. La lista nera è documentata direttamente nel codice sorgente con nome e tipo per ogni MMSI:
 
 <details>
-  <summary><kbd>Mostra lista nera MMSI (22 voci)</kbd></summary>
+  <summary><h1><kbd>Mostra lista nera MMSI (22 voci)</kbd></h1></summary>
 
 | MMSI | Nome | Tipo |
 |---|---|---|
