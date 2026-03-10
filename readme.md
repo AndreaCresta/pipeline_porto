@@ -1129,6 +1129,9 @@ Durante lo sviluppo e il testing della pipeline end-to-end sono state identifica
 
 * **Filtraggio Navi di Servizio Portuale (MMSI Blacklist):** L'analisi dei dati raccolti ha evidenziato la presenza sistematica di navi di servizio portuale (rimorchiatori, draghe, navi antinquinamento, battelli passeggeri locali) all'interno delle bounding box dei terminal, specialmente a Genova Voltri e Sampierdarena. Queste navi, pur essendo fisicamente presenti nell'area, non rappresentano traffico commerciale rilevante per i KPI logistici. Il problema è stato risolto costruendo una **lista nera di 22 MMSI** identificati manualmente tramite MarineTraffic e verificati uno per uno per tipo di nave. Il filtro viene applicato nel Lavoratore A prima che il record entri in coda, garantendo che il database contenga esclusivamente navi cargo, container e bulk carrier. La lista nera è documentata direttamente nel codice sorgente con nome e tipo per ogni MMSI:
 
+<details>
+  <summary><kbd>Mostra lista nera MMSI (22 voci)</kbd></summary>
+
 | MMSI | Nome | Tipo |
 |---|---|---|
 | 247539300 | VB INSIGNIA | Rimorchiatore |
@@ -1153,5 +1156,7 @@ Durante lo sviluppo e il testing della pipeline end-to-end sono state identifica
 | 247423700 | CAPO VADO | Salvage/Rescue Vessel |
 | 247377400 | SABATIA | Passenger (battello locale) |
 | 247299200 | (senza nome) | Nave di servizio non identificata |
+
+</details>
 
 * **Timeout e Stabilità WebSocket:** Il listener AIS è configurato con parametri espliciti di `open_timeout=60`, `ping_interval=20` e `ping_timeout=20` per gestire connessioni instabili su macOS. In caso di disconnessione, il meccanismo di auto-riconnessione con attesa di 30 secondi previene loop aggressivi che saturerebbero i tentativi di connessione verso il server AISStream.
