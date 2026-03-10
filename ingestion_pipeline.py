@@ -74,7 +74,36 @@ async def websocket_listener():
                     lon = meta.get('longitude')
                     time_utc = meta.get('time_utc', '').split('.')[0]
                     
-                    if mmsi and lat and lon:
+                    # --- LISTA NERA MMSI ---
+                    # Navi di servizio portuale identificate manualmente tramite MarineTraffic
+                    # e verificate per tipo: rimorchiatori, draghe, navi antinquinamento,
+                    # salvage/rescue vessel, utility vessel, passenger locali.
+                    MMSI_BLACKLIST = {
+                        247539300,  # VB INSIGNIA        — Rimorchiatore
+                        247317800,  # SAN GENNARO PRIMO  — Rimorchiatore
+                        247301200,  # G.LORIS            — Rimorchiatore
+                        256004628,  # OFFSHORE PROGRESS  — High Speed Craft
+                        247287200,  # BREZZAMARE         — Rimorchiatore
+                        247337400,  # CAVALIER SERGIO M. — Rimorchiatore
+                        247453600,  # ECO NAPOLI         — Nave di servizio
+                        247317300,  # SANT'AGOSTINO      — Rimorchiatore
+                        247317700,  # SAN ANTONIO        — Rimorchiatore
+                        247062300,  # SAN MARCO SECONDO  — Rimorchiatore
+                        247245100,  # NINO I             — Rimorchiatore
+                        247244200,  # SAN MARCO I        — Rimorchiatore
+                        256003619,  # VOE JARL           — Rimorchiatore
+                        215548000,  # FABIO DUO'         — Draga (Hopper Dredger)
+                        247277900,  # REDEEMER           — Nave antinquinamento
+                        228376800,  # JIF HELIOS         — Utility Vessel
+                        247338600,  # TECNE              — Tanker bunkeraggio
+                        247382900,  # ITALIA             — Rimorchiatore (Towing Vessel)
+                        247209800,  # MAREXPRESS         — Passenger (battello locale)
+                        247423700,  # CAPO VADO          — Salvage/Rescue Vessel
+                        247377400,  # SABATIA            — Passenger (battello locale)
+                        247299200,  # (senza nome)       — Nave di servizio non identificata
+                    }
+
+                    if mmsi and lat and lon and int(mmsi) not in MMSI_BLACKLIST:
                         zona = identifica_terminal(lat, lon)
                         record = (mmsi, ship_name, zona, lat, lon, time_utc)
                         await QUEUE.put(record)

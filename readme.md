@@ -145,7 +145,9 @@ FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-MM-01' + INTERVAL '1 month');
 Per gestire i picchi di traffico dei messaggi AIS (es. arrivo di intere flotte) ed evitare colli di bottiglia o *lock* sul database, lo script di ingestion (`ingestion_pipeline.py`) è stato riprogettato utilizzando un'architettura **asincrona con coda in memoria (Buffering)** basata su `asyncio`.
 
 Il flusso è stato progettato attorno a tre componenti logici principali:
-1. **Producer (Ricevitore API):** Ascolta il websocket in tempo reale. Appena riceve un JSON, lo decodifica, applica la logica di *Geofencing* per identificare il terminal e inserisce la tupla pulita in una `asyncio.Queue()`.
+1. **Producer (Ricevitore API):** Ascolta il websocket in tempo reale. Appena riceve un JSON, lo decodifica e applica due livelli di filtraggio prima di inserire il dato in coda:
+   - **Lista Nera MMSI (Blacklist):** Verifica il codice MMSI della nave contro una lista di 22 navi di servizio portuale identificate manualmente tramite MarineTraffic (rimorchiatori, draghe, navi antinquinamento, battelli locali). Le navi in lista nera vengono scartate silenziosamente a monte, prima di raggiungere il database.
+   - **Geofencing:** Applica la logica di identificazione del terminal tramite bounding box geografiche e inserisce la tupla pulita in una `asyncio.Queue()`.
 2. **Consumer (Scrittore DB):** Monitora la coda. Invece di eseguire una singola `INSERT` per ogni nave, estrae fino a 100 record alla volta e li scrive nel database con una singola istruzione di **Batch Insert** (`execute_values` di `psycopg2`).
 3. **Supervisor (Fault Tolerance):** Un meccanismo di controllo silente (`try-except` asincrono) che avvolge il sistema. Funge da "guardiano": se il server dell'API AIS cade o la rete del server si disconnette, il Supervisor blocca il crash dell'applicazione, attende 5 secondi e innesca una riconnessione automatica infinita, garantendo un sistema resiliente e un monitoraggio 24/7.
 
@@ -198,7 +200,7 @@ def identifica_terminal(lat, lon):
 
 # --- 3A. Lavoratore A (RICEVITORE: API -> CODA) ---
 async def websocket_listener():
-    api_key = "b7f29d875e4c6ccd444fd2c0e1d22a2a0ef57f9a"
+    api_key = "[INSERISCI LA TUA API KEY]"
     url = "wss://stream.aisstream.io/v0/stream"
 
     subscribe_message = {
@@ -210,32 +212,51 @@ async def websocket_listener():
         "FilterMessageTypes": ["PositionReport"]
     }
 
-    # Aggiungiamo un loop infinito per l'auto-riconnessione
+    # Configurazione SSL per macOS
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+    # Lista nera: navi di servizio portuale escluse dalla pipeline
+    MMSI_BLACKLIST = {
+        247539300, 247317800, 247301200, 256004628, 247287200, 247337400,
+        247453600, 247317300, 247317700, 247062300, 247245100, 247244200,
+        256003619, 215548000, 247277900, 228376800, 247338600, 247382900,
+        247209800, 247423700, 247377400, 247299200
+    }
+
     while True:
         try:
             print("📡 Lavoratore A: Tentativo di connessione all'API AISStream...")
-            async with websockets.connect(url) as websocket:
+            async with websockets.connect(
+                url,
+                ssl=ssl_context,
+                open_timeout=60,
+                ping_interval=20,
+                ping_timeout=20
+            ) as websocket:
                 await websocket.send(json.dumps(subscribe_message))
-                print("✅ Lavoratore A: Connesso all'API! Inizio a riempire la coda...\n" + "-"*50)
+                print("✅ Lavoratore A: Connesso all'API! Inizio a ricevere dati...\n" + "-"*50)
 
                 async for message in websocket:
                     data = json.loads(message)
-                    
-                    mmsi = data['MetaData']['MMSI']
-                    ship_name = data['MetaData']['ShipName']
-                    lat = data['MetaData']['latitude']
-                    lon = data['MetaData']['longitude']
-                    time_utc = data['MetaData']['time_utc'].split('.')[0]
-                    zona = identifica_terminal(lat, lon)
 
-                    # Crea una tupla col dato e lo sbatte SUBITO nella coda in memoria
-                    record = (mmsi, ship_name, zona, lat, lon, time_utc)
-                    await QUEUE.put(record)
-                    
+                    # Estrazione sicura dei dati
+                    meta = data.get('MetaData', {})
+                    mmsi = meta.get('MMSI')
+                    ship_name = meta.get('ShipName', 'Sconosciuta')
+                    lat = meta.get('latitude')
+                    lon = meta.get('longitude')
+                    time_utc = meta.get('time_utc', '').split('.')[0]
+
+                    if mmsi and lat and lon and int(mmsi) not in MMSI_BLACKLIST:
+                        zona = identifica_terminal(lat, lon)
+                        record = (mmsi, ship_name, zona, lat, lon, time_utc)
+                        await QUEUE.put(record)
+
         except Exception as e:
-            # Se la rete cade, va in timeout o il server li caccia, lo script non muore.
-            print(f"⚠️ Lavoratore A: Errore di connessione API ({e}). Riprovo tra 5 secondi...")
-            await asyncio.sleep(5) # Aspetta 5 secondi e poi il ciclo "while" riparte!
+            print(f"⚠️ Lavoratore A: Errore di connessione API ({e}). Riprovo tra 30 secondi...")
+            await asyncio.sleep(30)
 
 # --- 3B. Lavoratore B (SCRITTORE: CODA -> DATABASE) ---
 async def db_writer():
@@ -1031,7 +1052,7 @@ Il servizio Metabase nel `docker-compose.yml` punta a questo database tramite le
       - MB_DB_DBNAME=metabase_app_db
       - MB_DB_PORT=5432
       - MB_DB_USER=admin_tesi
-      - MB_DB_PASS=password_sicura
+      - MB_DB_PASS=[INSERISCI LA TUA PASSWORD]
       - MB_DB_HOST=db_tesi
     networks:
       - tesi_network
@@ -1106,4 +1127,31 @@ Durante lo sviluppo e il testing della pipeline end-to-end sono state identifica
 
 * **Rilevamento Partenze e Gestione Segnale Intermittente:** Un movimento viene marcato come concluso (`PARTITA`) solo quando il sistema intercetta un segnale della medesima nave nella zona `ALTRO_LIGURIA` con `timestamp_utc` **strettamente successivo** all'`orario_arrivo`. Questo vincolo, implementato nella clausola `AND sub.ultima_visto > f.orario_arrivo` del Task 5, previene la chiusura erronea di movimenti ancora aperti causata da segnali GPS ritardati o fuori sequenza.
 
-* **Timeout e Stabilità WebSocket:** Il listener AIS è configurato con parametri espliciti di `open_timeout=60`, `ping_interval=20` e `ping_timeout=20` per gestire connessioni instabili su macOS. In caso di disconnessione, il meccanismo di auto-riconnessione con attesa di 10 secondi previene loop aggressivi che saturerebbero i tentativi di connessione verso il server AISStream.
+* **Filtraggio Navi di Servizio Portuale (MMSI Blacklist):** L'analisi dei dati raccolti ha evidenziato la presenza sistematica di navi di servizio portuale (rimorchiatori, draghe, navi antinquinamento, battelli passeggeri locali) all'interno delle bounding box dei terminal, specialmente a Genova Voltri e Sampierdarena. Queste navi, pur essendo fisicamente presenti nell'area, non rappresentano traffico commerciale rilevante per i KPI logistici. Il problema è stato risolto costruendo una **lista nera di 22 MMSI** identificati manualmente tramite MarineTraffic e verificati uno per uno per tipo di nave. Il filtro viene applicato nel Lavoratore A prima che il record entri in coda, garantendo che il database contenga esclusivamente navi cargo, container e bulk carrier. La lista nera è documentata direttamente nel codice sorgente con nome e tipo per ogni MMSI:
+
+| MMSI | Nome | Tipo |
+|---|---|---|
+| 247539300 | VB INSIGNIA | Rimorchiatore |
+| 247317800 | SAN GENNARO PRIMO | Rimorchiatore |
+| 247301200 | G.LORIS | Rimorchiatore |
+| 256004628 | OFFSHORE PROGRESS | High Speed Craft |
+| 247287200 | BREZZAMARE | Rimorchiatore |
+| 247337400 | CAVALIER SERGIO M. | Rimorchiatore |
+| 247453600 | ECO NAPOLI | Nave di servizio |
+| 247317300 | SANT'AGOSTINO | Rimorchiatore |
+| 247317700 | SAN ANTONIO | Rimorchiatore |
+| 247062300 | SAN MARCO SECONDO | Rimorchiatore |
+| 247245100 | NINO I | Rimorchiatore |
+| 247244200 | SAN MARCO I | Rimorchiatore |
+| 256003619 | VOE JARL | Rimorchiatore |
+| 215548000 | FABIO DUO' | Draga (Hopper Dredger) |
+| 247277900 | REDEEMER | Nave antinquinamento |
+| 228376800 | JIF HELIOS | Utility Vessel |
+| 247338600 | TECNE | Tanker bunkeraggio |
+| 247382900 | ITALIA | Rimorchiatore (Towing Vessel) |
+| 247209800 | MAREXPRESS | Passenger (battello locale) |
+| 247423700 | CAPO VADO | Salvage/Rescue Vessel |
+| 247377400 | SABATIA | Passenger (battello locale) |
+| 247299200 | (senza nome) | Nave di servizio non identificata |
+
+* **Timeout e Stabilità WebSocket:** Il listener AIS è configurato con parametri espliciti di `open_timeout=60`, `ping_interval=20` e `ping_timeout=20` per gestire connessioni instabili su macOS. In caso di disconnessione, il meccanismo di auto-riconnessione con attesa di 30 secondi previene loop aggressivi che saturerebbero i tentativi di connessione verso il server AISStream.
