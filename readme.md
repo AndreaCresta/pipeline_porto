@@ -993,5 +993,115 @@ Questa configurazione garantisce che il caricamento della Fact Table avvenga *es
 
 <sub> *Figura 2: Grafico di esecuzione del DAG in Airflow: dipendenze topologiche e parallelismo dei task.* </sub>
 
+
 ## Fase 4: Data Visualization & Business Intelligence (Metabase)
-* *Pianificato:* Connessione in Import/DirectQuery tra Metabase e le viste materializzate in PostgreSQL per lo sviluppo di una dashboard direzionale, focalizzata sul monitoraggio visivo dei KPI logistici (tempi di ciclo) e degli allarmi di Overstay nei principali terminal di Genova e Vado.
+
+L'ultimo strato dell'architettura trasforma i dati processati e storicizzati in insight decisionali operativi. Per questa fase è stato implementato **Metabase**, uno strumento di Business Intelligence open-source, containerizzato tramite Docker e integrato nella rete `tesi_network` esistente. La scelta di Metabase rispetto a soluzioni proprietarie (es. Power BI, Tableau) è motivata dalla sua natura open-source, dalla semplicità di deployment via Docker e dalla capacità di connettersi nativamente a PostgreSQL senza driver aggiuntivi.
+
+### 4.1 Evoluzione dell'Infrastruttura (Docker Compose)
+
+Il container Metabase è stato aggiunto al `docker-compose.yml` esistente come quarto servizio, affiancandosi a `db_tesi`, `pgadmin` e ai servizi Airflow. Per garantire la persistenza dei metadati interni di Metabase (domande salvate, layout della dashboard, utenti), è stato creato un database PostgreSQL dedicato (`metabase_app_db`), separato dal database operativo `logistica_liguria`. Questo approccio è più robusto rispetto al database H2 embedded di default, che perde la configurazione ad ogni riavvio del container.
+
+La creazione automatica del database avviene tramite uno script SQL (`init-db/create_metabase_db.sql`) montato nel container PostgreSQL, che viene eseguito una sola volta al primo avvio dell'infrastruttura:
+
+<details>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
+
+```sql
+-- init-db/create_metabase_db.sql
+-- Eseguito automaticamente da PostgreSQL al primo avvio del container.
+CREATE DATABASE metabase_app_db;
+GRANT ALL PRIVILEGES ON DATABASE metabase_app_db TO admin_tesi;
+```
+
+</details>
+
+Il servizio Metabase nel `docker-compose.yml` punta a questo database tramite le variabili d'ambiente `MB_DB_*`:
+
+<details>
+  <summary><kbd>Clicca per visualizzare il codice</kbd></summary>
+
+```yaml
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase_bi
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_DBNAME=metabase_app_db
+      - MB_DB_PORT=5432
+      - MB_DB_USER=admin_tesi
+      - MB_DB_PASS=password_sicura
+      - MB_DB_HOST=db_tesi
+    networks:
+      - tesi_network
+    depends_on:
+      - db_tesi
+```
+
+</details>
+
+*Nota tecnica:* La variabile `MB_DB_HOST=db_tesi` sfrutta la risoluzione DNS interna di Docker: Metabase raggiunge il database PostgreSQL tramite il nome del servizio, senza esporre la porta all'esterno. Una volta avviato, l'interfaccia è accessibile su `http://localhost:3000`.
+
+### 4.2 Architettura di Visualizzazione: Disaccoppiamento tramite Viste Materializzate
+
+Metabase non interroga direttamente le tabelle operative (`fact_movimenti`, `staging_ais_data`). La connessione avviene in **lettura esclusiva** sulle Viste Materializzate (`mv_kpi_tempi_porto` e `mv_kpi_confronto_terminal`), già calcolate e aggiornate da Airflow ogni 5 minuti.
+
+Questa scelta architetturale garantisce due proprietà fondamentali:
+
+* **Decoupling (Disaccoppiamento):** Il carico computazionale (aggregazioni, join, calcolo delle medie) è interamente gestito da Airflow sul database. Metabase legge solo il risultato pre-calcolato, senza mai interferire con i processi di ingestion o orchestrazione.
+* **Latenza Zero lato BI:** Le dashboard si caricano in pochi millisecondi poiché i dati sono già materializzati fisicamente su disco. Non vengono mai eseguiti calcoli complessi on-the-fly lato visualizzazione.
+
+### 4.3 Domande di Business e Progettazione della Dashboard
+
+La dashboard direzionale **"Monitoraggio Porto di Genova"** è stata progettata attorno a quattro domande operative fondamentali, ciascuna mappata su uno o più pannelli visivi:
+
+#### D1 — Quali navi sono in porto adesso?
+**Pannello: Mappa Navale Real-Time**
+
+Una mappa geografica interattiva mostra la posizione corrente di tutte le navi attive nelle aree monitorate. I marker sono distribuiti visivamente nei tre cluster corrispondenti ai terminal (Voltri a ovest, Sampierdarena e porto centro a est). La fonte dati è la vista `mv_kpi_tempi_porto`, filtrata sui record con `orario_partenza IS NULL`, ovvero le navi ancora ormeggiate. Il pannello numerico adiacente (**Ping ricevuti nelle ultime 24 ore**) contestualizza il volume di segnali AIS processati dalla pipeline: al momento del test, **11.866 segnali** in 24 ore, confermando la continuità operativa del sistema di ingestion.
+
+#### D2 — Quanto tempo stanno le navi in porto?
+**Pannelli: Tempo di ciclo delle navi + Efficienza dei terminal**
+
+Due pannelli complementari rispondono alla stessa domanda da angolazioni diverse. Il grafico a barre orizzontali (**Tempo di ciclo**) mostra la media delle ore di permanenza per terminal: Vado Gateway e Genova Voltri si attestano intorno a 1.3 ore di sosta media, mentre Genova Sampierdarena registra circa 0.6 ore. Il grafico a barre verticali (**Efficienza dei terminal**) ripropone la stessa metrica in formato comparativo, rendendo immediata l'identificazione del terminal con il Turnaround Time più elevato. Entrambi i pannelli attingono dalla colonna `media_ore_permanenza` della vista `mv_kpi_confronto_terminal`.
+
+#### D3 — In quali ore arriva più traffico?
+**Pannelli: Trend degli arrivi + Fasce orarie critiche**
+
+Il grafico a linea (**Trend degli arrivi**) mostra l'andamento temporale del numero di arrivi registrati: si osserva un picco significativo nella prima rilevazione (32 arrivi a mezzanotte del 10 marzo, corrispondente al primo ciclo di elaborazione del DAG dopo l'avvio del sistema), seguito da una stabilizzazione tra 4 e 8 arrivi per ciclo nelle ore successive. Lo scatter plot (**Fasce orarie critiche**) disaggrega gli arrivi per ora del giorno, evidenziando concentrazioni nelle fasce 10:00, 15:00–17:00. Questi dati permettono ai responsabili logistici di anticipare i picchi di occupazione e pianificare le risorse di banchina.
+
+#### D4 — Quali terminal sono più congestionati?
+**Pannello: Occupazione Live dei Terminal**
+
+Il grafico a ciambella (**Occupazione Live dei Terminal**) mostra la distribuzione percentuale delle navi attualmente in porto tra i tre terminal monitorati. Al momento del test: Genova Voltri **53%**, Vado Gateway **33%**, Genova Sampierdarena **13%**. Il totale di **15 navi attive** rappresenta la fotografia istantanea dello stato operativo del porto. La fonte dati è la colonna `numero_scali` aggregata per `terminal` dalla vista `mv_kpi_confronto_terminal`.
+
+### 4.4 Sincronizzazione Near Real-Time: Architettura a 3 Livelli
+
+Il sistema è progettato per garantire un monitoraggio *quasi live* mantenendo la coerenza del database relazionale. Il flusso end-to-end si articola su tre livelli temporali sovrapposti:
+
+| Livello | Componente | Frequenza | Descrizione |
+|---|---|---|---|
+| **1 - Ingestion** | `ingestion_pipeline.py` | Continua (real-time) | Inserimento batch su `staging_ais_data` non appena i segnali AIS arrivano via WebSocket |
+| **2 - Orchestrazione** | Apache Airflow DAG | Ogni 5 minuti | Il DAG processa lo staging, consolida i movimenti e lancia `REFRESH MATERIALIZED VIEW` |
+| **3 - Visualizzazione** | Metabase | Ogni 60 secondi | Auto-refresh frontend che rilegge le viste materializzate aggiornate |
+
+Il disallineamento massimo fisiologico tra la posizione reale di una nave e la sua visualizzazione in dashboard è di **~5 minuti**, determinato dalla cadenza di esecuzione del DAG Airflow (il collo di bottiglia più lento della catena).
+
+### 4.5 Resilienza e Troubleshooting
+
+Durante lo sviluppo e il testing della pipeline end-to-end sono state identificate e risolte le seguenti criticità:
+
+* **Database metadati Metabase mancante:** Nella configurazione iniziale, il container Metabase crashava in loop perché il database `metabase_app_db` specificato nelle variabili `MB_DB_*` non esisteva su PostgreSQL. La soluzione adottata è stata la creazione di uno script SQL di inizializzazione (`init-db/create_metabase_db.sql`) montato in `/docker-entrypoint-initdb.d/`, eseguito automaticamente da PostgreSQL al primo avvio. Questo approccio garantisce che il database esista prima che Metabase tenti di connettersi.
+
+* **Allineamento Schemi (Data Mapping):** La colonna `terminal_zona` prodotta dalla logica di Geofencing Python (`ingestion_pipeline.py`) deve corrispondere esattamente al campo `codice_zona` in `dim_terminal`. Qualsiasi discrepanza nei valori stringa (es. `GENOVA_VOLTRI` vs `genova_voltri`) causerebbe violazioni di Foreign Key nella `fact_movimenti`. Il sistema è stato validato garantendo la coerenza maiuscole/minuscole in tutta la pipeline.
+
+* **Idempotenza dei Task Airflow:** Tutti i task di aggiornamento dimensionale sfruttano il costrutto `ON CONFLICT (chiave) DO UPDATE/NOTHING`, garantendo che esecuzioni multiple dello stesso DAG (es. in caso di retry automatico) non generino duplicati o errori nel Data Warehouse.
+
+* **Bounding Box Geofencing Sampierdarena:** Nella prima configurazione, la bounding box del terminal Sampierdarena era troppo estesa, causando la classificazione erronea di ormeggiatori, VDF e imbarcazioni da diporto come navi del terminal container. La box è stata ristretta al solo fronte banchina PSA SECH (Calata Sanità/Bettolo): `lat 44.404–44.410 / lon 8.907–8.918`, eliminando i falsi positivi.
+
+* **Rilevamento Partenze e Gestione Segnale Intermittente:** Un movimento viene marcato come concluso (`PARTITA`) solo quando il sistema intercetta un segnale della medesima nave nella zona `ALTRO_LIGURIA` con `timestamp_utc` **strettamente successivo** all'`orario_arrivo`. Questo vincolo, implementato nella clausola `AND sub.ultima_visto > f.orario_arrivo` del Task 5, previene la chiusura erronea di movimenti ancora aperti causata da segnali GPS ritardati o fuori sequenza.
+
+* **Timeout e Stabilità WebSocket:** Il listener AIS è configurato con parametri espliciti di `open_timeout=60`, `ping_interval=20` e `ping_timeout=20` per gestire connessioni instabili su macOS. In caso di disconnessione, il meccanismo di auto-riconnessione con attesa di 10 secondi previene loop aggressivi che saturerebbero i tentativi di connessione verso il server AISStream.
