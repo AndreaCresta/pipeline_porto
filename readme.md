@@ -1080,25 +1080,22 @@ La dashboard direzionale **"Monitoraggio Porto di Genova"** è stata progettata 
 #### D1 — Quali navi sono in porto adesso?
 **Pannello: Mappa Navale Real-Time**
 
-Una mappa geografica interattiva mostra la posizione corrente di tutte le navi attive nelle aree monitorate. I marker sono distribuiti visivamente nei tre cluster corrispondenti ai terminal (Voltri a ovest, Sampierdarena e porto centro a est). La fonte dati è la vista `mv_kpi_tempi_porto`, filtrata sui record con `orario_partenza IS NULL`, ovvero le navi ancora ormeggiate. Il pannello numerico adiacente (**Ping ricevuti nelle ultime 24 ore**) contestualizza il volume di segnali AIS processati dalla pipeline: al momento del test, **11.866 segnali** in 24 ore, confermando la continuità operativa del sistema di ingestion.
+Una mappa geografica interattiva mostra la posizione corrente di tutte le navi attive nelle aree monitorate. I marker sono distribuiti visivamente nei tre cluster corrispondenti ai terminal (Voltri a ovest, Sampierdarena e porto centro a est). La fonte dati è la tabella `staging_ais_data`, filtrata sulle ultime 24 ore per terminal zona. Il pannello numerico adiacente (**Ping ricevuti nelle ultime 24 ore**) contestualizza il volume di segnali AIS processati dalla pipeline: al momento del test, **8.377 segnali** in 24 ore, confermando la continuità operativa del sistema di ingestion.
 
-#### D2 — Quanto tempo stanno le navi in porto?
-**Pannelli: Tempo di ciclo delle navi + Efficienza dei terminal**
+#### D2 — Quanti scali ha gestito ogni terminal?
+**Pannello: Scali Totali per Terminal**
 
-Due pannelli complementari rispondono alla stessa domanda da angolazioni diverse. Il grafico a barre orizzontali (**Tempo di ciclo**) mostra la media delle ore di permanenza per terminal: Vado Gateway e Genova Voltri si attestano intorno a 1.3 ore di sosta media, mentre Genova Sampierdarena registra circa 0.6 ore. Il grafico a barre verticali (**Efficienza dei terminal**) ripropone la stessa metrica in formato comparativo, rendendo immediata l'identificazione del terminal con il Turnaround Time più elevato. Entrambi i pannelli attingono dalla colonna `media_ore_permanenza` della vista `mv_kpi_confronto_terminal`.
+La tabella riassuntiva mostra per ciascun terminal il numero di scali totali registrati, i cicli completati (navi arrivate e ripartite) e le navi ancora in porto al momento della rilevazione. Al momento del test: Genova Sampierdarena **34 scali totali** (22 completati, 12 ancora in porto), Genova Voltri **18 scali** (7 completati, 11 in porto), Vado Gateway **12 scali** (2 completati, 10 in porto). La fonte dati è la `fact_movimenti` aggregata per `codice_zona`.
 
 #### D3 — In quali ore arriva più traffico?
-**Pannelli: Trend degli arrivi + Fasce orarie critiche**
+**Pannello: Trend degli arrivi**
 
-Il grafico a linea (**Trend degli arrivi**) mostra l'andamento temporale del numero di arrivi registrati: si osserva un picco significativo nella prima rilevazione (32 arrivi a mezzanotte del 10 marzo, corrispondente al primo ciclo di elaborazione del DAG dopo l'avvio del sistema), seguito da una stabilizzazione tra 4 e 8 arrivi per ciclo nelle ore successive. Lo scatter plot (**Fasce orarie critiche**) disaggrega gli arrivi per ora del giorno, evidenziando concentrazioni nelle fasce 10:00, 15:00–17:00. Questi dati permettono ai responsabili logistici di anticipare i picchi di occupazione e pianificare le risorse di banchina.
+Il grafico a linee mostra l'andamento temporale degli arrivi distinto per terminal. Si osserva un picco nella prima rilevazione (corrispondente al primo ciclo di elaborazione del DAG dopo l'avvio del sistema), seguito da una stabilizzazione tra 3 e 7 arrivi per ciclo nelle ore successive. Sampierdarena mantiene il volume più alto in modo costante, coerentemente con il dato di 34 scali totali.
 
-#### D4 — Quali terminal sono più congestionati?
-**Pannello: Occupazione Live dei Terminal**
+#### D4 — Quali terminal sono più congestionati e quanto tempo sostano le navi?
+**Pannelli: Occupazione Live dei Terminal + Efficienza dei terminal**
 
-Il grafico a ciambella (**Occupazione Live dei Terminal**) mostra la distribuzione percentuale delle navi attualmente in porto tra i tre terminal monitorati. Al momento del test: Genova Voltri **53%**, Vado Gateway **33%**, Genova Sampierdarena **13%**. Il totale di **15 navi attive** rappresenta la fotografia istantanea dello stato operativo del porto. La fonte dati è la colonna `numero_scali` aggregata per `terminal` dalla vista `mv_kpi_confronto_terminal`.
-
-<img width="1075" height="862" alt="dashboard1" src="https://github.com/user-attachments/assets/a9e74fa0-f953-4da2-be2d-f885776b4527" />
-<img width="1075" height="842" alt="dashboard2" src="https://github.com/user-attachments/assets/e54eba82-d952-4cf2-b6eb-2dd323124845" />
+Il grafico a ciambella mostra la distribuzione percentuale delle navi attualmente in porto: Genova Sampierdarena **56%**, Genova Voltri **22%**, Vado Ligure **22%**, per un totale di **18 navi attive**. Il grafico a barre (**Efficienza dei terminal**) affianca questa fotografia istantanea con la media delle ore di sosta per terminal: Genova Sampierdarena ~**2.3 ore**, Vado Gateway ~**2.1 ore**, Genova Voltri ~**1.2 ore**. La fonte dati per entrambi i pannelli è la vista `mv_kpi_confronto_terminal`.
 
 
 ### 4.4 Sincronizzazione Near Real-Time: Architettura a 3 Livelli
@@ -1130,7 +1127,7 @@ Durante lo sviluppo e il testing della pipeline end-to-end sono state identifica
 * **Filtraggio Navi di Servizio Portuale (MMSI Blacklist):** L'analisi dei dati raccolti ha evidenziato la presenza sistematica di navi di servizio portuale (rimorchiatori, draghe, navi antinquinamento, battelli passeggeri locali) all'interno delle bounding box dei terminal, specialmente a Genova Voltri e Sampierdarena. Queste navi, pur essendo fisicamente presenti nell'area, non rappresentano traffico commerciale rilevante per i KPI logistici. Il problema è stato risolto costruendo una **lista nera di 22 MMSI** identificati manualmente tramite MarineTraffic e verificati uno per uno per tipo di nave. Il filtro viene applicato nel Lavoratore A prima che il record entri in coda, garantendo che il database contenga esclusivamente navi cargo, container e bulk carrier. La lista nera è documentata direttamente nel codice sorgente con nome e tipo per ogni MMSI:
 
 <details>
-  <summary><h1><kbd>Mostra lista nera MMSI (22 voci)</kbd></h1></summary>
+  <summary><kbd>Mostra lista nera MMSI (22 voci)</kbd></summary>
 
 | MMSI | Nome | Tipo |
 |---|---|---|
